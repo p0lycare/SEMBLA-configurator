@@ -707,6 +707,63 @@ export function normBodenblechAussparungen(arr, N) {
   return { felder, bereiche, fehler };
 }
 
+// ---------- Bodenblech im Verband: Kuerzung unter der Verzahnung ([A-32], Miro R03) ----------
+// An einer Ecke oder einem T-Anschluss greifen zwei Waende mit ihren Verzahnungsbereichen
+// ineinander ([G-10]). Laegen dort BEIDE Bodenbleche, ueberlagerten sie sich. Darum gilt:
+// Liegt ein Verzahnungsbereich am WANDENDE (g0 == 0 oder g1 == N) und belegt die Wand dort die
+// UNTERSTE Lage (start_parity 1 = erst die zweite Lage ausgespart), entfaellt unter dem Bereich
+// das Bodenblech dieser Wand. Die Partnerwand (start_parity 0, Luecke in der untersten Lage)
+// behaelt ihr Blech bis zum Wandende, und der Stein der untersten Lage der gekuerzten Wand
+// ueberbrueckt die Blechfuge ([A-11]). Ein Bereich MITTEN in der Wand (T-Anschluss, die
+// durchlaufende Wand) wird NIE gekuerzt — die durchlaufende Wand hat Vorrang.
+//
+// Die Kuerzung ist ABGELEITET: sie wird bei jeder Rechnung frisch aus den Verzahnungsbereichen
+// gebildet und NIE in `base_plate_aussparungen_grid` gespeichert. Gerechnet wird sie mit genau
+// dem Mechanismus der manuellen Aussparungen ([A-28]/[A-29]/[A-31]): die Felder werden mit den
+// manuellen vereinigt, und jeder verbleibende Bereich wird unabhaengig zerlegt. Ganze
+// Rasterfelder, kein Sondermass. Was sich so nicht sauber loesen laesst, wird BENANNT
+// (Warnung zur manuellen Pruefung) — nie still eine Sonderloesung.
+
+/**
+ * Abgeleitete Bodenblech-Kuerzungen unter Verzahnungsbereichen am Wandende ([A-32]).
+ * Reine Funktion.
+ * @param {Array<{g0:number,g1:number,start_parity:number}>} interlocks normalisierte,
+ *        gueltige Verzahnungsbereiche (aufsteigend)
+ * @param {number} N Wandlaenge in Rastern
+ * @param {number[]} [lage1Fugen] reale Stossfugen der untersten Lage (Rasterpositionen)
+ * @returns {{kuerzungen:Array<{g0:number,g1:number,x0_mm:number,x1_mm:number,laenge_mm:number,
+ *            ende:"anfang"|"ende"|"beide"}>, felder:number[],
+ *            hinweise:Array<{grund:string,[k:string]:any}>}}
+ */
+export function verzahnungsKuerzungen(interlocks, N, lage1Fugen = []) {
+  const fugen = new Set((lage1Fugen || []).map(Number));
+  const kuerzungen = [], felder = [], hinweise = [];
+  for (const il of (Array.isArray(interlocks) ? interlocks : [])) {
+    const amAnfang = il.g0 === 0, amEnde = il.g1 === N;
+    if (!amAnfang && !amEnde) {
+      // [A-32] T-Anschluss: die durchlaufende Wand behaelt ihr Blech immer. Belegt sie dort
+      // die unterste Lage, ueberlagern sich die Bleche bzw. bleibt die Fuge unueberbrueckt —
+      // nicht sauber loesbar, also benannt (Empfehlung: unterste Lage aussparen).
+      if (il.start_parity === 1)
+        hinweise.push({ grund: "durchlaufend_lage1_belegt", g0: il.g0, g1: il.g1,
+          start_parity: il.start_parity });
+      continue;
+    }
+    if (il.start_parity !== 1) continue;      // Luecke in der untersten Lage: Blech bleibt
+    kuerzungen.push({ g0: il.g0, g1: il.g1, x0_mm: il.g0 * GRID, x1_mm: il.g1 * GRID,
+      laenge_mm: (il.g1 - il.g0) * GRID,
+      ende: amAnfang && amEnde ? "beide" : amAnfang ? "anfang" : "ende" });
+    for (let k = il.g0; k < il.g1; k++) felder.push(k);
+    // [A-32]/[A-11] Die Kuerzungsgrenze ist die Fuge zum Blech der Partnerwand. Liegt dort in
+    // der untersten Lage eine Steinfuge, ueberbrueckt kein Stein die Blechfuge.
+    const grenze = amAnfang && amEnde ? null : amAnfang ? il.g1 : il.g0;
+    if (grenze !== null && fugen.has(grenze))
+      hinweise.push({ grund: "fuge_an_kuerzung", g0: il.g0, g1: il.g1, grid: grenze,
+        x_mm: grenze * GRID });
+  }
+  return { kuerzungen, felder, hinweise };
+}
+
 /**
  * [A-29] EINEN zusammenhaengenden Bodenblechbereich [x0, x1) zerlegen — mit genau den Regeln
  * aus [A-10]/[A-11]/[A-12]. Der Bereich wird UNABHAENGIG von jedem anderen gerechnet: seine
@@ -1185,6 +1242,86 @@ function pickTiling(startGrid, n, prev) {
   return best.comp;
 }
 
+/** Hoechstzahl der Suchschritte in `legeVerband` (Schutz gegen exponentielle Faelle). */
+const LEGE_SCHRITTE = 5000;
+
+/**
+ * [G-5] Legt mehrere Lagen so, dass ueber ALLE Lagen keine Kreuzfuge entsteht.
+ *
+ * `pickTiling` schaut nur nach unten; die unterste Lage hat keinen Bezug und nimmt bei
+ * Gleichstand die erste Variante — die Lage darueber kann dann ohne Ausweg kreuzen.
+ * Hier wird deshalb deterministisch zurueckverfolgt: je Lage werden nur kreuzfugenfreie
+ * Varianten versucht, in GENAU der Vorzugsreihenfolge von `pickTiling` (i3-Zahl, Abstand,
+ * dann Kandidatenreihenfolge). Der erste Pfad ist damit die bisherige Gierwahl — wo sie
+ * kreuzfugenfrei ist, bleibt das Ergebnis bit-gleich. Gibt es keine kreuzfugenfreie
+ * Kombination, bleibt es bei der Gierwahl samt Meldung (`versatz_violations`).
+ * @param {Array<Array<[number,number]>>} cutsJeLage je Lage die zusammenhaengenden Abschnitte
+ * @returns {Array<Array<number[]>>} je Lage je Abschnitt die Steinfolge
+ */
+function legeVerband(cutsJeLage) {
+  const L = cutsJeLage.length;
+  const fugen = (cuts, comps) => {
+    const js = new Set();
+    cuts.forEach(([s], i) => { for (const j of segJoints(s, comps[i])) js.add(j); });
+    return js;
+  };
+  /** Kreuzfugenfreie Varianten je Abschnitt, geordnet wie `pickTiling` sie bevorzugt. */
+  const varianten = (s, n, prev) => {
+    const out = [], gesehen = new Set();
+    for (const comp of candidates(n)) {
+      const k = comp.join(",");
+      if (gesehen.has(k)) continue;
+      gesehen.add(k);
+      const js = segJoints(s, comp);
+      if ([...js].some(j => prev.has(j))) continue;
+      const i3 = comp.filter(b => b === 3).length;
+      let dist = 99;
+      if (js.size && prev.size) dist = Math.min(...[...js].flatMap(j => [...prev].map(f => Math.abs(j - f))));
+      out.push({ comp, i3, dist });
+    }
+    // stabil: bei Gleichstand gilt die Kandidatenreihenfolge (wie das strikte `>` in pickTiling)
+    out.sort((a, b) => (b.i3 - a.i3) || (b.dist - a.dist));
+    return out.map(v => v.comp);
+  };
+  const sackgasse = new Set();
+  const loesung = new Array(L);
+  let schritte = 0;
+  const suche = (li, prev) => {
+    // Feste Schrittgrenze statt Laufzeitgrenze: deterministisch und in beiden Cores gleich.
+    if (++schritte > LEGE_SCHRITTE) return false;
+    if (li === L) return true;
+    const memo = li + "|" + [...prev].sort((a, b) => a - b).join(",");
+    if (sackgasse.has(memo)) return false;
+    const cuts = cutsJeLage[li];
+    const je = cuts.map(([s, e]) => varianten(s, e - s, prev));
+    if (je.every(v => v.length)) {
+      // Kombinationen lexikographisch in Vorzugsreihenfolge (erster Abschnitt aussen)
+      const idx = new Array(cuts.length).fill(0);
+      for (;;) {
+        const comps = idx.map((k, i) => je[i][k]);
+        if (suche(li + 1, fugen(cuts, comps))) { loesung[li] = comps; return true; }
+        if (schritte > LEGE_SCHRITTE) return false;   // abgebrochen ist keine Sackgasse
+        let i = cuts.length - 1;
+        while (i >= 0 && idx[i] === je[i].length - 1) { idx[i] = 0; i--; }
+        if (i < 0) break;
+        idx[i]++;
+      }
+    }
+    sackgasse.add(memo);
+    return false;
+  };
+  if (suche(0, new Set())) return loesung;
+  // Keine kreuzfugenfreie Kombination (oder Schrittgrenze erreicht): bisherige Gierwahl, die
+  // Kreuzfugen werden gemeldet.
+  const gier = []; let prev = new Set();
+  for (const cuts of cutsJeLage) {
+    const comps = cuts.map(([s, e]) => pickTiling(s, e - s, prev));
+    gier.push(comps);
+    prev = fugen(cuts, comps);
+  }
+  return gier;
+}
+
 function balancedFill(a, b, maxstep) {
   if (b <= a) return [a];
   const k = Math.ceil((b - a) / maxstep);
@@ -1607,8 +1744,9 @@ export function buildWall(name, lengthMm, heightMm, openings = [], sides = null,
   // ---- Erster Durchgang: VOLLSTAENDIGER Steinverband (Basis fuer occ und Vorspannung) ----
   // [G-11] Die Spannachsen werden aus dem VOLLSTAENDIGEN Steinverband berechnet, OHNE die
   // Verzahnungsaussparungen. Dieser erste Durchgang laeuft IMMER — auch bei Verzahnungsbereichen.
-  const courses = []; let prev = new Set();
+  const courses = [];
   const rigidLagen = []; const invalidSegments = [];
+  const cutsVoll = [];
   for (let li = 0; li < L; li++) {
     let cuts = runsAt(li);
     for (const op of openings) {
@@ -1622,7 +1760,7 @@ export function buildWall(name, lengthMm, heightMm, openings = [], sides = null,
         cuts = nc;
       }
     }
-    const stones = []; let joints = new Set(); let rig = false;
+    let rig = false;
     for (const [s, e] of cuts) {
       const w = e - s;
       if (FORBIDDEN_N.has(w)) {
@@ -1631,15 +1769,25 @@ export function buildWall(name, lengthMm, heightMm, openings = [], sides = null,
         if (!invalidSegments.some(x => x.lage === li && x.start_grid === s && x.breite_grid === w))
           invalidSegments.push(seg);
       }
-      const comp = pickTiling(s, w, prev);
+    }
+    if (rig) rigidLagen.push(li);
+    cutsVoll.push(cuts);
+  }
+  // [G-5] Tiling ueber ALLE Lagen gemeinsam (`legeVerband`): eine Lage darf der Lage darueber
+  // nicht den kreuzfugenfreien Ausweg verbauen. Wo die bisherige Gierwahl kreuzfugenfrei ist,
+  // ist das Ergebnis bit-gleich.
+  const verbandVoll = legeVerband(cutsVoll);
+  for (let li = 0; li < L; li++) {
+    const stones = []; const joints = new Set();
+    cutsVoll[li].forEach(([s], i) => {
+      const comp = verbandVoll[li][i];
       for (const j of segJoints(s, comp)) joints.add(j);
       let g = s;
       for (const b of comp) {
         stones.push({ type: b === 2 ? "i2" : "i3", x0: g * GRID, x1: (g + b) * GRID });
         g += b;
       }
-    }
-    if (rig) rigidLagen.push(li);
+    });
     // #136 Jede Lage traegt ihre Geometrie selbst — Unterkante, Oberkante und Hoehe in mm.
     courses.push({ lage: li, unterkante_mm: KANTEN[li].unterkante_mm,
       oberkante_mm: KANTEN[li].oberkante_mm, hoehe_mm: KANTEN[li].hoehe_mm,
@@ -1647,7 +1795,6 @@ export function buildWall(name, lengthMm, heightMm, openings = [], sides = null,
       // das sie vorher nicht hatte (die goldenen 200-mm-Fixtures bleiben unveraendert).
       ...(KANTEN[li].ausgleich ? { ausgleich: true } : {}),
       stones, joints_grid: [...joints].sort((a, b) => a - b) });
-    prev = joints;
   }
 
   // `occ`, `steinIvVoll` und `kopfVoll` basieren auf dem VOLLSTAENDIGEN Verband (vor dem Aussparen) — [G-11].
@@ -1676,7 +1823,7 @@ export function buildWall(name, lengthMm, heightMm, openings = [], sides = null,
     // darunter neu gelegten, verkuerzten Lage (#143).
     // [G-11] bleibt unberuehrt: `occ`, `steinIvVoll` und `kopfVoll` stehen oben bereits aus dem
     // VOLLSTAENDIGEN Verband fest und werden hier nicht mehr angefasst.
-    let prevIl = new Set();
+    const cutsJeLage = [];
     for (let li = 0; li < L; li++) {
       // cuts aus dem vollstaendigen Verband holen (gleicher Weg wie oben)
       let cuts = runsAt(li);
@@ -1702,31 +1849,37 @@ export function buildWall(name, lengthMm, heightMm, openings = [], sides = null,
         }
         cuts = nc;
       }
-      // Neues Tiling gegen die REALEN Fugen der Lage darunter
-      const stones = []; const joints = new Set();
+      // Nicht baubare Restbreiten durch Verzahnung melden (getrennt von den strukturellen);
+      // ohne Aussparung in dieser Lage ist die Restbreite strukturell und steht schon oben.
       for (const [s, e] of cuts) {
         const w = e - s;
-        // Nicht baubare Restbreiten durch Verzahnung melden (getrennt von den strukturellen);
-        // ohne Aussparung in dieser Lage ist die Restbreite strukturell und steht schon oben.
         if (relevantIls.length && FORBIDDEN_N.has(w)) {
           const seg = { lage: li, start_grid: s, breite_grid: w };
           if (!interlockInvalidSegments.some(x => x.lage === li && x.start_grid === s && x.breite_grid === w))
             interlockInvalidSegments.push(seg);
         }
-        const comp = pickTiling(s, w, prevIl);
+      }
+      cutsJeLage.push(cuts);
+    }
+    // [G-5] Neues Tiling ueber ALLE Lagen gemeinsam — auch die unterste Lage muss der Lage
+    // darueber einen kreuzfugenfreien Ausweg lassen (`legeVerband`).
+    const verband = legeVerband(cutsJeLage);
+    for (let li = 0; li < L; li++) {
+      const stones = []; const joints = new Set();
+      cutsJeLage[li].forEach(([s], i) => {
+        const comp = verband[li][i];
         for (const j of segJoints(s, comp)) joints.add(j);
         let g = s;
         for (const b of comp) {
           stones.push({ type: b === 2 ? "i2" : "i3", x0: g * GRID, x1: (g + b) * GRID });
           g += b;
         }
-      }
+      });
       courses[li].stones = stones;
       // [G-5] Die Fugen der Lage sind die REALEN Steinberuehrungen des ausgesparten Verbands —
       // Aussen- und Lueckenkanten zaehlen nicht (`segJoints` liefert nur Fugen INNERHALB eines
       // zusammenhaengenden Abschnitts).
       courses[li].joints_grid = [...joints].sort((a, b) => a - b);
-      prevIl = joints;
     }
   }
 
@@ -1969,8 +2122,17 @@ export function buildWall(name, lengthMm, heightMm, openings = [], sides = null,
   // validiert; abgewiesene Eintraege werden benannt und nicht angewandt.
   const AS = normBodenblechAussparungen(PS.base_plate_aussparungen_grid, N);
   if (AS.felder) PS.base_plate_aussparungen_grid = AS.felder;
+  // [A-32] Abgeleitete Kuerzung unter Verzahnungsbereichen am Wandende — frisch gerechnet, NIE
+  // gespeichert (das Feld oben bleibt allein die manuelle Wahl). Vereinigt mit den manuellen
+  // Feldern und dann ueber denselben Weg normalisiert ([A-28]): ohne Kuerzung ist `aussparBereiche`
+  // genau `AS.bereiche`, das Ergebnis also bit-gleich.
+  const lage1Fugen = courses.length ? courses[0].joints_grid : [];
+  const VK = verzahnungsKuerzungen(IL.interlocks, N, lage1Fugen);
+  const aussparBereiche = VK.felder.length
+    ? normBodenblechAussparungen([...(AS.felder || []), ...VK.felder], N).bereiche
+    : AS.bereiche;
   const bodenZerlegung = zerlegeBodenblech(lengthMm, PS.blech_lengths_mm,
-    courses.length ? courses[0].joints_grid : [], AS.bereiche);
+    lage1Fugen, aussparBereiche);
   const bodenTeile = bodenZerlegung.teile;
   const bodenModule = bodenTeile.length;      // Anzahl REALER Bodenblechteile
   const kopfModule = (TOP === "blech") ? Math.ceil(topEdgeLen / PS.blech_mm) : 0;
@@ -1980,7 +2142,34 @@ export function buildWall(name, lengthMm, heightMm, openings = [], sides = null,
   const bodenLaenge = lengthMm - ausgespartMm;
   const basePlate = { rolle: "bodenblech", laenge_mm: bodenLaenge, breite_mm: THICK, dicke_mm: PS.blech_dicke_mm, modul_mm: PS.blech_mm, module: bodenModule, teile: bodenTeile,
     // [A-28] Die kanonischen Luecken — nur wenn es welche gibt.
-    ...(bodenZerlegung.luecken.length ? { aussparungen: bodenZerlegung.luecken } : {}) };
+    ...(bodenZerlegung.luecken.length ? { aussparungen: bodenZerlegung.luecken } : {}),
+    // [A-32] Die abgeleiteten Kuerzungen unter der Verzahnung — nur wenn es welche gibt. Sie
+    // sind in `aussparungen` bereits enthalten; hier stehen sie, damit jede Ausgabe sie als
+    // „Blech der Partnerwand" statt als leere Aussparung zeigen kann.
+    ...(VK.kuerzungen.length ? { verzahnung_kuerzungen: VK.kuerzungen } : {}) };
+  // [A-32] Benannte Faelle zur manuellen Pruefung (keine stille Sonderloesung):
+  //  - durchlaufend_lage1_belegt / fuge_an_kuerzung aus `verzahnungsKuerzungen()`;
+  //  - sonderzuschnitt: ein an eine Kuerzung grenzender Bereich laesst sich nicht allein aus
+  //    den gewaehlten Standardlaengen ([A-10]) zerlegen — die Zerlegung bleibt die bestehende,
+  //    der Sonderzuschnitt wird aber nicht still hingenommen;
+  //  - achse_auf_partnerblech: eine Spannachse steht im gekuerzten Feld, ihre Fussschraube also
+  //    auf dem Bodenblech der Partnerwand.
+  const vzHinweise = VK.hinweise.slice();
+  if (VK.kuerzungen.length) {
+    const kFeld = new Set(VK.felder);
+    const anKuerzung = (x) => bodenZerlegung.luecken.some((lu) =>
+      (lu.x0_mm === x || lu.x1_mm === x) && VK.kuerzungen.some((k) => k.g0 < lu.g1 && lu.g0 < k.g1));
+    for (const b of bodenZerlegung.bereiche) {
+      if (!anKuerzung(b.x0_mm) && !anKuerzung(b.x1_mm)) continue;
+      for (const tl of bodenTeile)
+        if (tl.art === "sonder" && tl.x0_mm >= b.x0_mm && tl.x0_mm < b.x1_mm)
+          vzHinweise.push({ grund: "sonderzuschnitt", x0_mm: b.x0_mm, x1_mm: b.x1_mm,
+            laenge_mm: b.laenge_mm, fertigmass_mm: tl.bauteil_mm });
+    }
+    if (!bodenZerlegung.bereiche.length) vzHinweise.push({ grund: "kein_bodenblech" });
+    for (const col of columns)
+      if (kFeld.has(col.k)) vzHinweise.push({ grund: "achse_auf_partnerblech", k: col.k, x_mm: col.x_mm });
+  }
   const topPlate = (TOP === "blech")
     ? { rolle: "kopfblech", laenge_mm: topEdgeLen, breite_mm: THICK, dicke_mm: PS.kopfblech_dicke_mm, modul_mm: PS.blech_mm, module: kopfModule }
     : null;
@@ -2109,6 +2298,9 @@ export function buildWall(name, lengthMm, heightMm, openings = [], sides = null,
       // [A-30] Abgewiesene manuelle Aussparungsfelder — benannt, verworfen, nie verschoben.
       // Der Schluessel entsteht NUR im Fehlerfall.
       ...(AS.fehler.length ? { aussparung_fehler: AS.fehler } : {}),
+      // [A-32] Bodenblech im Verband: Faelle zur manuellen Pruefung — benannt, KEIN
+      // Baubarkeitsausschluss. Der Schluessel entsteht NUR im Befundfall.
+      ...(vzHinweise.length ? { verzahnung_bodenblech: vzHinweise } : {}),
       // [V-2] Steine ohne Spannachse. Auto-Pfad: immer leer. Manuelle Achsen: echter Befund.
       ungehaltene_steine: ungehalteneSteine,
       // [G-12] Ungueltige/fehlerhafte Verzahnungsbereiche (sichtbare Warnung, kein Baubarkeitsausschluss)
