@@ -12,7 +12,7 @@ import { wandAlsIfc } from "../js/export-ifc.js";
 import { traglattenReihen } from "../js/aufbau-geometrie.js";
 import { freieHoehen, nachweis } from "../js/verbinder.js";
 import { wandAlsDxf } from "../js/export-dxf.js";
-import { wandAlsLv } from "../js/export-lv.js";
+import { wandAlsLv, lvDaten } from "../js/export-lv.js";
 import { zustandAusUrl, urlParameter, aufbauWahl, datenblattParameter, RECHENSTAND, STANDARD } from "../js/inhalte.js";
 
 const A = JSON.parse(readFileSync(new URL("../data/aufbauten.json", import.meta.url), "utf8"));
@@ -295,6 +295,11 @@ test("Exporte: IFC4, DXF und Ausschreibungstext für jede Fassade und Innenseite
     assert.ok(/01\.01 {2}Trockenmauerwerk SEMBLA/.test(lv) && !/NaN|undefined|null/.test(lv), `${f.id}/${i.id}: LV`);
     assert.ok(!/tragende Wand aus/.test(lv.replace("Nichttragende Wand aus", "")), `${f.id}/${i.id}: LV verspricht keine tragende Wand`);
     assert.ok(f.schichten?.length ? /Zustimmung im Einzelfall/.test(lv) : /DIN 4103-1/.test(lv), `${f.id}/${i.id}: Verwendbarkeit`);
+      const lvd = lvDaten(r, r.fassade, a.innen, {});
+      const alle = lvd.titel.flatMap((t) => t.positionen);
+      assert.ok(alle.every((p) => p.kurz.length <= 70 && p.menge > 0 && !/undefined|NaN/.test(p.kurz + p.lang)), `${f.id}/${i.id}: LV-Positionen vollständig`);
+      assert.equal(lvd.titel.some((t) => /Zustimmung im Einzelfall/.test(t.name)), !!f.schichten?.length, `${f.id}/${i.id}: ZiE-Titel nur mit Fassade`);
+      assert.ok(!alle.some((p) => /^Bekleidung/.test(p.kurz) && p.einheit !== "m²"), `${f.id}/${i.id}: Bekleidung nach Fläche`);
   }
 });
 

@@ -40,7 +40,7 @@ $("drucken").onclick = () => window.print();
 // Downloads für die Planung: BIM (IFC4), CAD (DXF) und Ausschreibungstext. Die Exporte werden erst
 // beim Klick geladen, damit das Datenblatt schnell erscheint.
 const dateiname = `SEMBLA-Wand_${(r.kennzahlen.laenge_mm / 1000).toFixed(2).replace(".", ",")}x${(r.kennzahlen.raumhoehe_mm / 1000).toFixed(2).replace(".", ",")}m`;
-const info = { link: location.href, titel: `SEMBLA-Wand ${m(r.kennzahlen.laenge_mm)} × ${m(r.kennzahlen.raumhoehe_mm)}` };
+const info = { link: location.href, titel: `SEMBLA-Wand ${m(r.kennzahlen.laenge_mm)} × ${m(r.kennzahlen.raumhoehe_mm)}`, windlast: verbinder?.last?.text };
 function herunterladen(inhalt, name, typ) {
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([inhalt], { type: typ }));
