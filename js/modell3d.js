@@ -10,9 +10,10 @@ import { traglattenReihen } from "./aufbau-geometrie.js";
 
 const FASE = 3;          // Kantenrundung der vereinfachten Steine
 const NUT_B = 22, NUT_T = 10, KAMMER = 58;
-// Einlegeblech am Zwischenspannpunkt: Maße angenommen (in der Suite nicht hinterlegt), Oberkante
-// bündig mit der Lagenoberkante in der Vertiefung, Mutter darüber.
-const EINLEGEBLECH = { b: 100, d: 5 };
+// Spannteile aus den Bauteil-OBJs (data/spannteile.json, Ursprung in der Stangenachse, y nach
+// oben). Bis die Netze geladen sind, stehen Quader mit denselben Außenmaßen: Breite, y0, y1, Tiefe.
+const ERSATZ = { mutter: [17, 0, 8, 19.6], langmutter: [17, 0, 30, 19.6], senkkopf: [22.4, 0, 30.3, 22.4], einlegeblech: [47, -8.5, 1.5, 90] };
+const EINLEGEBLECH_OBEN = 1.5;   // Oberkante des Blechs über seinem Ursprung
 // Gestufte Darstellung: jede Schicht endet um STUFE_MM früher als die darunterliegende.
 const STUFE_MM = 450;
 
@@ -105,14 +106,32 @@ export function erstelle(canvas) {
   let echteSteine = null;   // vereinfachte Originalgeometrie aus data/steine.json
   const geo = (m) => (echteSteine && echteSteine[m]) || (steinGeo[m] ||= steinGeometrie(m));
   let letzterAufruf = null;
+  const netz = (p) => {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.Float32BufferAttribute(p.v, 3));
+    g.setIndex(p.f);
+    const flach = g.toNonIndexed(); flach.computeVertexNormals(); g.dispose();
+    return flach;
+  };
+  let spannteile = null;
+  const ersatzGeo = {};
+  const teilGeo = (n) => spannteile?.[n] || (ersatzGeo[n] ||= (() => {
+    const [b, y0, y1, t] = ERSATZ[n], g = new THREE.BoxGeometry(b, y1 - y0, t);
+    g.translate(0, (y0 + y1) / 2, 0); return g;
+  })());
+  /** Ein Spannteil an vielen Stellen auf der Stangenachse (Wandmitte). punkte: [{x, y}] */
+  function teil(n, punkte, material) {
+    const im = new THREE.InstancedMesh(teilGeo(n), material, Math.max(1, punkte.length));
+    const o = new THREE.Object3D();
+    punkte.forEach((p, i) => { o.position.set(p.x, p.y, -THICK / 2); o.updateMatrix(); im.setMatrixAt(i, o.matrix); });
+    im.count = punkte.length;
+    return im;
+  }
+  fetch(new URL("../data/spannteile.json", import.meta.url)).then((r) => r.json()).then((P) => {
+    spannteile = Object.fromEntries(Object.entries(P).map(([k, p]) => [k, netz(p)]));
+    if (letzterAufruf) aktualisiere(...letzterAufruf);
+  }).catch(() => { /* Ersatzquader bleiben */ });
   fetch(new URL("../data/steine.json", import.meta.url)).then((r) => r.json()).then((P) => {
-    const netz = (p) => {
-      const g = new THREE.BufferGeometry();
-      g.setAttribute("position", new THREE.Float32BufferAttribute(p.v, 3));
-      g.setIndex(p.f);
-      const flach = g.toNonIndexed(); flach.computeVertexNormals(); g.dispose();
-      return flach;
-    };
     echteSteine = { 2: netz(P.i2), 3: netz(P.i3) };
     Object.values(echteSteine).forEach((g) => (steinGeo["echt" + g.id] = g));
     if (letzterAufruf) aktualisiere(...letzterAufruf);
@@ -227,27 +246,41 @@ export function erstelle(canvas) {
       im.userData.liste = liste; steine.add(im); return im;
     });
 
-    // Spannsystem
+    // Spannsystem: Gewindestange je Segment, Kopplungsmuttern an den Stößen. Am Wandfuß
+    // Senkkopfschraube durchs Bodenblech in die Kopplungsmutter, die Stange steckt zur Hälfte darin.
+    // An jedem Spannplatten-Ende Platte und Spannmutter (oben darauf, über einer Öffnung darunter).
     const spann = new THREE.Group();
     const stahl = mat(farben.stahl, { metalness: 0.6, roughness: 0.4 });
-    const stab = new THREE.CylinderGeometry(5, 5, 1, 10);
-    const platten = [];
+    const stab = new THREE.CylinderGeometry(5, 5, 1, 12);
+    const platten = [], muttern = [], kopplung = [], schrauben = [];
     for (const col of w.tension_columns) for (const sg of col.segments) {
+      const x = col.x_mm, fuss = sg.anker_unten === "bodenblech";
+      const laengen = (sg.stuecke || []).map((t) => t.len_mm);
+      const gesamt = laengen.reduce((a, b) => a + b, 0) || sg.z1_mm - sg.z0_mm + 30;
+      const start = fuss ? sg.z0_mm + 15 : sg.z0_mm - 25;
       const rod = new THREE.Mesh(stab, stahl);
-      rod.scale.y = sg.z1_mm - sg.z0_mm + 30; rod.position.set(col.x_mm, (sg.z0_mm + sg.z1_mm) / 2 + 15, -THICK / 2);
+      rod.scale.y = gesamt; rod.position.set(x, start + gesamt / 2, -THICK / 2);
       spann.add(rod);
-      platten.push({ x0: col.x_mm - 60, x1: col.x_mm + 60, y0: sg.z1_mm, y1: sg.z1_mm + 10, z0: -THICK / 2 - 60, z1: -THICK / 2 + 60 });
+      let y = start;
+      for (const l of laengen.slice(0, -1)) { y += l; kopplung.push({ x, y: y - 15 }); }
+      if (fuss) { kopplung.push({ x, y: sg.z0_mm }); schrauben.push({ x, y: sg.z0_mm - 10 }); }
+      else {
+        platten.push({ x0: x - 60, x1: x + 60, y0: sg.z0_mm - 10, y1: sg.z0_mm, z0: -THICK / 2 - 60, z1: -THICK / 2 + 60 });
+        muttern.push({ x, y: sg.z0_mm - 18 });
+      }
+      platten.push({ x0: x - 60, x1: x + 60, y0: sg.z1_mm, y1: sg.z1_mm + 10, z0: -THICK / 2 - 60, z1: -THICK / 2 + 60 });
+      muttern.push({ x, y: sg.z1_mm + 10 });
     }
-    spann.add(quader(platten, stahl));
-    // Einlegebleche der Zwischenspannpunkte: liegen in der Lage und gehen beim Rückbau mit ihr.
+    spann.add(quader(platten, stahl), teil("mutter", muttern, stahl), teil("langmutter", kopplung, stahl), teil("senkkopf", schrauben, stahl));
+    // Einlegebleche der Zwischenspannpunkte mit Mutter: Oberkante bündig mit der Lagenoberkante,
+    // sie liegen in der Lage und gehen beim Rückbau mit ihr.
     const lageAn = (z) => w.courses.findIndex((c) => Math.abs(c.oberkante_mm - z) < 1);
     const zp = wirksameZwischenpunkte(w).map((p) => ({ x: p.x_mm, y: p.z_mm, li: Math.max(0, lageAn(p.z_mm)) }));
     const einlege = new THREE.Group();
-    const eb = EINLEGEBLECH.b / 2;
     // Signalfarbe, damit die Bleche zwischen den abgehobenen Lagen auffallen.
     const blechMat = mat(farben.einlegeblech || "#E0A100", { metalness: 0.3, roughness: 0.45 });
-    const blechM = quader(zp.map((p) => ({ x0: p.x - eb, x1: p.x + eb, y0: p.y - EINLEGEBLECH.d, y1: p.y, z0: -THICK / 2 - eb, z1: -THICK / 2 + eb })), blechMat);
-    const mutterM = quader(zp.map((p) => ({ x0: p.x - 9, x1: p.x + 9, y0: p.y, y1: p.y + 8, z0: -THICK / 2 - 9, z1: -THICK / 2 + 9 })), blechMat);
+    const blechM = teil("einlegeblech", zp.map((p) => ({ x: p.x, y: p.y - EINLEGEBLECH_OBEN })), blechMat);
+    const mutterM = teil("mutter", zp.map((p) => ({ x: p.x, y: p.y })), blechMat);
     blechM.userData.liste = mutterM.userData.liste = zp;
     einlege.add(blechM, mutterM);
     const boden = quader([{ x0: 0, x1: L, y0: -10, y1: 0, z0: -THICK, z1: 0 }], stahl);
