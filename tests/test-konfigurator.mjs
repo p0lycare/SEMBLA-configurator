@@ -13,6 +13,7 @@ import { traglattenReihen } from "../js/aufbau-geometrie.js";
 import { freieHoehen, nachweis } from "../js/verbinder.js";
 import { wandAlsDxf } from "../js/export-dxf.js";
 import { wandAlsLv, lvDaten } from "../js/export-lv.js";
+import { wandAlsGaeb } from "../js/export-gaeb.js";
 import { zustandAusUrl, urlParameter, aufbauWahl, datenblattParameter, RECHENSTAND, STANDARD } from "../js/inhalte.js";
 
 const A = JSON.parse(readFileSync(new URL("../data/aufbauten.json", import.meta.url), "utf8"));
@@ -300,6 +301,14 @@ test("Exporte: IFC4, DXF und Ausschreibungstext für jede Fassade und Innenseite
       assert.ok(alle.every((p) => p.kurz.length <= 70 && p.menge > 0 && !/undefined|NaN/.test(p.kurz + p.lang)), `${f.id}/${i.id}: LV-Positionen vollständig`);
       assert.equal(lvd.titel.some((t) => /Zustimmung im Einzelfall/.test(t.name)), !!f.schichten?.length, `${f.id}/${i.id}: ZiE-Titel nur mit Fassade`);
       assert.ok(!alle.some((p) => /^Bekleidung/.test(p.kurz) && p.einheit !== "m²"), `${f.id}/${i.id}: Bekleidung nach Fläche`);
+      // GAEB X83 (gegen das XSD 3.3 geprüft, siehe README): je Position ein Item, IDs eindeutig.
+      const x83 = wandAlsGaeb(r, r.fassade, a.innen, { titel: "Test & <Wand>" });
+      assert.ok(x83.includes('xmlns="http://www.gaeb.de/GAEB_DA_XML/DA83/3.3"') && x83.includes("<DP>83</DP>"), `${f.id}/${i.id}: X83-Kopf`);
+      assert.equal((x83.match(/<Item /g) || []).length, alle.length, `${f.id}/${i.id}: X83-Positionen`);
+      assert.equal((x83.match(/<BoQCtgy /g) || []).length, lvd.titel.length, `${f.id}/${i.id}: X83-Titel`);
+      const xids = [...x83.matchAll(/ ID="([^"]+)"/g)].map((m) => m[1]);
+      assert.equal(new Set(xids).size, xids.length, `${f.id}/${i.id}: X83-IDs eindeutig`);
+      assert.ok(x83.includes("Test &amp; &lt;Wand&gt;") && !/Test & </.test(x83), `${f.id}/${i.id}: X83 maskiert`);
   }
 });
 

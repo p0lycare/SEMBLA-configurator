@@ -52,6 +52,7 @@ const EXPORTE = {
   ifc: async () => herunterladen((await import("./export-ifc.js")).wandAlsIfc(r, r.fassade, innen, info), `${dateiname}.ifc`, "application/x-step"),
   dxf: async () => herunterladen((await import("./export-dxf.js")).wandAlsDxf(r, r.fassade, innen, info), `${dateiname}.dxf`, "application/dxf"),
   lv: async () => herunterladen("\ufeff" + (await import("./export-lv.js")).wandAlsLv(r, r.fassade, innen, info), `${dateiname}_Ausschreibung.txt`, "text/plain;charset=utf-8"),
+  gaeb: async () => herunterladen((await import("./export-gaeb.js")).wandAlsGaeb(r, r.fassade, innen, info), `${dateiname}_LV.x83`, "application/xml"),
 };
 document.querySelectorAll("[data-export]").forEach((b) => (b.onclick = async () => {
   b.disabled = true;
