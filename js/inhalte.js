@@ -13,7 +13,7 @@ export const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "
 
 // Stand der Rechnung. Ändert sich die Auslegung, steigt er; Datenblatt-Links tragen ihn als `v`
 // und dazu die damals gewählten Dämmstärken (`dd`, `da`), damit verschickte Datenblätter gleich bleiben.
-export const RECHENSTAND = 5;   // 5: Verbinder-Vorbemessung, Installationsebene 27 mm, λB Holzfaserplatte (03.11.2026)
+export const RECHENSTAND = 6;   // 6: Steinverband über alle Lagen ohne Kreuzfuge (Rechenkern 2f88b6b, 04.11.2026)
 
 // Voreinstellung und frühere Kennungen (alt → neu), damit alte Links nicht ins Leere laufen.
 export const STANDARD = { fassade: "schindel", innen: "trockenbau_putz", ziel: "beg" };
