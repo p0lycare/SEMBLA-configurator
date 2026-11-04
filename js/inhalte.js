@@ -1,13 +1,15 @@
 // Gemeinsame Inhalte von Konfigurator und Datenblatt: Konfiguration aus der URL lesen und
 // schreiben, Kennzahlen, Stückliste, Regeln und Wärmeschutz als HTML.
 
-import { ROHWAND, VERBINDERSCHRAUBEN, OEFFNUNGEN } from "./wand.js";
+import { ROHWAND, VERBINDERSCHRAUBEN, OEFFNUNGEN, oeffnungsMasse } from "./wand.js";
 import { THICK } from "./sembla-core.js";
 import { teilBild } from "./teilebilder.js";
 import { auslegen, daemmText } from "./waerme.js";
 
 export const de = (x, d = 2) => x.toLocaleString("de-DE", { minimumFractionDigits: d, maximumFractionDigits: d });
 export const m = (mm, d = 2) => `${de(mm / 1000, d)} m`;
+/** Maß im 12,5-cm-Raster: drei Nachkommastellen nur, wo nötig (8,625 m statt 8,63 m). */
+export const mRaster = (mm) => m(mm, Math.round(mm) % 10 ? 3 : 2);
 /** Text für innerHTML: Namen aus den Daten können Sonderzeichen enthalten. */
 export const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 
@@ -19,14 +21,19 @@ export const RECHENSTAND = 6;   // 6: Steinverband über alle Lagen ohne Kreuzfu
 export const STANDARD = { fassade: "schindel", innen: "trockenbau_putz", ziel: "beg" };
 const ALIAS = { fassade: {}, innen: {}, ziel: {} };
 
-// Öffnungen in der URL: o=t21,f5,f33 (Art und Startraster); Altform o=tuer&p=21.
+// Öffnungen in der URL: o=t21,f5,f33 (Art und Startraster), abweichende Maße angehängt:
+// b Breite in Rastern, h Höhe in Lagen, u Brüstung in Lagen (o=t21b10h12,f5u3). Altform o=tuer&p=21.
 function oeffnungenAusUrl(url) {
   const o = url.get("o");
   if (o === null) return [{ art: "tuer", pos: null }];
   if (o === "keine" || o === "") return [];
   if (o === "tuer" || o === "fenster") return [{ art: o, pos: url.has("p") ? +url.get("p") : null }];
-  return o.split(",").map((s) => /^([tf])(\d+)?$/.exec(s.trim())).filter(Boolean)
-    .map(([, a, p]) => ({ art: a === "t" ? "tuer" : "fenster", pos: p ? +p : null }))
+  return o.split(",").map((s) => /^([tf])(\d+)?(?:b(\d+))?(?:h(\d+))?(?:u(\d+))?$/.exec(s.trim())).filter(Boolean)
+    .map(([, a, p, b, h, u]) => {
+      const x = { art: a === "t" ? "tuer" : "fenster", pos: p ? +p : null };
+      for (const [k, v] of [["b", b], ["h", h], ["u", u]]) if (v) x[k] = +v;
+      return x;
+    })
     .filter((x, i, a) => a.slice(0, i).filter((y) => y.art === x.art).length < OEFFNUNGEN[x.art].max);
 }
 
@@ -48,10 +55,16 @@ export function zustandAusUrl(url) {
   return z;
 }
 
+function oeffnungKurz(x) {
+  const def = OEFFNUNGEN[x.art], ms = oeffnungsMasse(x);
+  return (x.art === "tuer" ? "t" : "f") + (Number.isFinite(x.pos) ? x.pos : "")
+    + (ms.b !== def.breite_grid ? `b${ms.b}` : "") + (ms.h !== def.lagen ? `h${ms.h}` : "") + (ms.u !== def.l0 ? `u${ms.u}` : "");
+}
+
 /** URL-Parameter der Konfiguration, mit den aufgelösten Werten aus dem Ergebnis. */
 export function urlParameter(zustand, r) {
   const k = r.kennzahlen;
-  const o = zustand.oeffnungen.map((x) => (x.art === "tuer" ? "t" : "f") + (Number.isFinite(x.pos) ? x.pos : "")).join(",") || "keine";
+  const o = zustand.oeffnungen.map(oeffnungKurz).join(",") || "keine";
   return { l: k.laenge_mm, h: k.raumhoehe_mm, o, f: zustand.fassade, i: zustand.innen, w: zustand.ziel };
 }
 

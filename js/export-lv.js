@@ -80,7 +80,7 @@ export function wandAlsLv(r, fassade, innen, info = {}) {
     + `Alle Bauteile zerstörungsfrei rückbaubar und wiederverwendbar.`);
   for (const op of r.oeffnungen.filter(Boolean)) {
     pos(1, "Stk", `Öffnung ${op.art === "tuer" ? "Tür" : "Fenster"} im SEMBLA-Raster`,
-      `Öffnung für ${op.art === "tuer" ? "eine Tür" : "ein Fenster"}, Rohbaumaß nach Systemplanung, Laibungen und Sturz im SEMBLA-System ausgebildet (Spannplatten am Segmentende). Lage ab ${de(op.g0 * 0.125)} m vom Wandanfang.`);
+      `Öffnung für ${op.art === "tuer" ? "eine Tür" : "ein Fenster"}, Rohbaumaß ${de((op.g1 - op.g0) * 0.125, 3)} × ${de((op.l1 - op.l0) * 0.2)} m (B × H)${op.l0 ? `, Brüstung ${de(op.l0 * 0.2)} m` : ""}, maßgenau nach Systemplanung, Laibungen und Sturz im SEMBLA-System ausgebildet (Spannplatten am Segmentende). Lage ab ${de(op.g0 * 0.125, 3)} m vom Wandanfang.`);
   }
   const decke = gruppen.find((g) => g.id === "spann")?.teile.find((t) => t.symbol === "deckenanschluss");
   if (decke) pos(decke.menge, "Stk", "Deckenanschluss auf Spannachse", "Deckenanschluss als Winkel auf der Spannachse, an der Rohdecke befestigt, Fuge elastisch und schalltechnisch entkoppelt geschlossen.");

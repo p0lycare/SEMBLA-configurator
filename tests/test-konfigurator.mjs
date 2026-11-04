@@ -3,7 +3,7 @@
 
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { berechne, oeffnungenAufloesen, schraubenlaenge, schichtLagen, DECKENFUGE_MM, AUSGLEICH_MIN_MM } from "../js/wand.js";
+import { berechne, oeffnungenAufloesen, oeffnungsMasse, schraubenlaenge, schichtLagen, DECKENFUGE_MM, AUSGLEICH_MIN_MM } from "../js/wand.js";
 import { GRID, FORBIDDEN_N } from "../js/sembla-core.js";
 import { stueckliste, alsCsv } from "../js/stueckliste.js";
 import { auslegen, uWert, mitDaemmung } from "../js/waerme.js";
@@ -13,7 +13,7 @@ import { traglattenReihen } from "../js/aufbau-geometrie.js";
 import { freieHoehen, nachweis } from "../js/verbinder.js";
 import { wandAlsDxf } from "../js/export-dxf.js";
 import { wandAlsLv } from "../js/export-lv.js";
-import { zustandAusUrl, aufbauWahl, datenblattParameter, RECHENSTAND, STANDARD } from "../js/inhalte.js";
+import { zustandAusUrl, urlParameter, aufbauWahl, datenblattParameter, RECHENSTAND, STANDARD } from "../js/inhalte.js";
 
 const A = JSON.parse(readFileSync(new URL("../data/aufbauten.json", import.meta.url), "utf8"));
 const fass = (id) => A.fassaden.find((f) => f.id === id);
@@ -74,6 +74,21 @@ test("Öffnung rastet auf die nächste baubare Position und weicht anderen aus",
   const [a, b] = oeffnungenAufloesen(L, H, [{ art: "fenster", pos: 10 }, { art: "fenster", pos: 10 }], 1);
   assert.equal(a.g0, 10, "die ruhende Öffnung bleibt");
   assert.ok(b.g0 >= a.g1 + 2 || b.g1 <= a.g0 - 2, "die bewegte weicht aus");
+});
+
+test("Öffnungsmaße wählbar, mehrere Türen, Maße in der URL", () => {
+  const L = 6000, H = 2820;
+  const [t, f] = oeffnungenAufloesen(L, H, [{ art: "tuer", pos: 4, b: 10, h: 12 }, { art: "fenster", pos: 30, b: 12, h: 5, u: 3 }]);
+  assert.deepEqual([t.g1 - t.g0, t.l0, t.l1], [10, 0, 12], "Tür 1,25 × 2,40 m");
+  assert.deepEqual([f.g1 - f.g0, f.l0, f.l1], [12, 3, 8], "Fenster 1,50 × 1,00 m, Brüstung 0,60 m");
+  assert.deepEqual(oeffnungsMasse({ art: "tuer", b: 99, h: 1 }), { b: 16, h: 10, u: 0 }, "auf den Bereich begrenzt");
+  // Tür höher als die Wand minus eine Lage: passt nicht
+  assert.equal(oeffnungenAufloesen(L, 2480, [{ art: "tuer", h: 13 }])[0], null);
+  const r = berechne({ laenge_mm: 9000, raumhoehe_mm: 2850, oeffnungen: [{ art: "tuer", pos: null }, { art: "tuer", pos: null }, { art: "tuer", pos: null }] });
+  assert.equal(r.oeffnungen.filter(Boolean).length, 3, "drei Türen auf 9 m");
+  const z = zustandAusUrl(new URLSearchParams("o=t4b10h12,t30,f20u3"));
+  assert.deepEqual(z.oeffnungen, [{ art: "tuer", pos: 4, b: 10, h: 12 }, { art: "tuer", pos: 30 }, { art: "fenster", pos: 20, u: 3 }]);
+  assert.equal(urlParameter(z, berechne({ ...z, fassade: fass("sicht"), innen: inn("sicht") })).o.split(",")[0].replace(/^t\d+/, ""), "b10h12", "Maße bleiben im Link");
 });
 
 test("Verbinder nach Modul 2: nur innen in einem Stein, in Lagenmitte, nie in Öffnung oder Ausgleichslage", () => {

@@ -1,12 +1,12 @@
 // Oberfläche: Zustand, Bedienelemente, Kennzahlen, Regeln. Die Konfiguration steht in der URL
 // (?l=…&h=…), damit sich ein Stand teilen lässt.
 
-import { berechne, zusammenfassung, GRENZEN, OEFFNUNGEN } from "./wand.js";
+import { berechne, zusammenfassung, GRENZEN, OEFFNUNGEN, oeffnungsMasse, masseText } from "./wand.js";
 import { zeichne } from "./ansicht2d.js";
 import { eingebettet, hoeheMelden, formularOeffnen, ereignis } from "./einbettung.js";
 import { stueckliste, alsCsv } from "./stueckliste.js";
 import { daemmText } from "./waerme.js";
-import { de, m, esc, zustandAusUrl, urlParameter, datenblattParameter, aufbauWahl, kachelnHtml, stuecklisteHtml, regelnHtml, hinweiseHtml, waermeHtml } from "./inhalte.js";
+import { de, m, mRaster, esc, zustandAusUrl, urlParameter, datenblattParameter, aufbauWahl, kachelnHtml, stuecklisteHtml, regelnHtml, hinweiseHtml, waermeHtml } from "./inhalte.js";
 import { datenblattAnfrage } from "./anfrage.js";
 
 const $ = (id) => document.getElementById(id);
@@ -47,29 +47,45 @@ $("laenge").min = GRENZEN.laengeMin; $("laenge").max = GRENZEN.laengeMax;
 $("hoehe").min = GRENZEN.hoeheMin; $("hoehe").max = GRENZEN.hoeheMax;
 $("laenge").oninput = (e) => { zustand.laenge_mm = +e.target.value; planen(); };
 $("hoehe").oninput = (e) => { zustand.raumhoehe_mm = +e.target.value; planen(); };
-const meter = (mm) => `${de(mm / 1000)} Meter`;
+const meter = (mm) => `${de(mm / 1000, Math.round(mm) % 10 ? 3 : 2)} Meter`;
 
 // ---------- Öffnungen ----------
+const MASSE = { b: ["Breite", 125], h: ["Höhe", 200], u: ["Brüstung", 200] };
+function masseAuswahl(o, i) {
+  const B = OEFFNUNGEN[o.art].bereich;
+  return Object.entries(MASSE).filter(([k]) => B[k][1] > B[k][0]).map(([k, [name, schritt]]) => {
+    const opts = [];
+    for (let n = B[k][0]; n <= B[k][1]; n++) opts.push(`<option value="${n}">${de(n * schritt / 1000, n * schritt % 10 ? 3 : 2)} m</option>`);
+    return `<label class="mass">${name}<select data-mass="${k}" data-i="${i}">${opts.join("")}</select></label>`;
+  }).join("");
+}
 let listenSchluessel = "";
 function oeffnungenZeichnen(r) {
   const N = r.w.length_mm / 125;
   const schluessel = zustand.oeffnungen.map((o) => o.art).join() + "|" + N;
   const liste = $("oeffnungsliste");
+  const titel = (i) => {
+    const o = zustand.oeffnungen[i], gleiche = zustand.oeffnungen.filter((x) => x.art === o.art);
+    const nr = zustand.oeffnungen.slice(0, i + 1).filter((x) => x.art === o.art).length;
+    return gleiche.length > 1 || o.art === "fenster" ? `${OEFFNUNGEN[o.art].name} ${nr}` : OEFFNUNGEN[o.art].name;
+  };
   if (schluessel !== listenSchluessel) {
     listenSchluessel = schluessel;
-    let fenster = 0;
-    liste.innerHTML = zustand.oeffnungen.map((o, i) => {
-      const def = OEFFNUNGEN[o.art];
-      const titel = o.art === "tuer" ? def.name : `${def.name} ${++fenster}`;
-      return `<div class="oeffnung-zeile" data-i="${i}">
-        <span class="zeile"><b>${titel}</b><span class="klein mono" data-info></span>
-          <button type="button" class="entfernen" data-weg="${i}" aria-label="${titel} entfernen">×</button></span>
-        <input type="range" min="0" max="${N - def.breite_grid}" step="1" data-pos="${i}" aria-label="Position ${titel}, Abstand vom linken Wandende">
-      </div>`;
-    }).join("");
+    liste.innerHTML = zustand.oeffnungen.map((o, i) => `<div class="oeffnung-zeile" data-i="${i}">
+        <span class="zeile"><b>${titel(i)}</b><span class="klein mono" data-info></span>
+          <button type="button" class="entfernen" data-weg="${i}" aria-label="${titel(i)} entfernen">×</button></span>
+        <input type="range" min="0" max="${N - oeffnungsMasse(o).b}" step="1" data-pos="${i}" aria-label="Position ${titel(i)}, Abstand vom linken Wandende">
+        <span class="masse-wahl">${masseAuswahl(o, i)}</span>
+      </div>`).join("");
     liste.querySelectorAll("[data-pos]").forEach((el) => (el.oninput = () => {
       const i = +el.dataset.pos;
       zustand.oeffnungen[i].pos = +el.value; zustand.aktiv = i; planen();
+    }));
+    liste.querySelectorAll("[data-mass]").forEach((el) => (el.onchange = () => {
+      const i = +el.dataset.i;
+      zustand.oeffnungen[i][el.dataset.mass] = +el.value; zustand.aktiv = i;
+      ereignis("oeffnung_mass", { art: zustand.oeffnungen[i].art, [el.dataset.mass]: +el.value });
+      planen();
     }));
     liste.querySelectorAll("[data-weg]").forEach((el) => (el.onclick = () => {
       zustand.oeffnungen.splice(+el.dataset.weg, 1); zustand.aktiv = -1; planen();
@@ -77,13 +93,17 @@ function oeffnungenZeichnen(r) {
   }
   zustand.oeffnungen.forEach((o, i) => {
     const zeile = liste.querySelector(`[data-i="${i}"]`);
-    const res = r.oeffnungen[i];
+    const res = r.oeffnungen[i], ms = oeffnungsMasse(o);
     zeile.classList.toggle("passt-nicht", !res);
+    const zuHoch = ms.u + ms.h >= r.w.courses.filter((c) => !c.ausgleich).length;
     zeile.querySelector("[data-info]").textContent = res
-      ? `${OEFFNUNGEN[o.art].masse} · ab ${m(res.g0 * 125)}` : "passt nicht in die Wand";
+      ? `${masseText(o)} · ab ${mRaster(res.g0 * 125)}`
+      : zuHoch ? `${masseText(o)} · zu hoch für die Raumhöhe` : `${masseText(o)} · passt nicht in die Wand`;
+    zeile.querySelectorAll("[data-mass]").forEach((el) => (el.value = ms[el.dataset.mass]));
+    const regler = zeile.querySelector("[data-pos]");
+    regler.max = N - ms.b;
     if (res) {
       o.pos = res.g0;
-      const regler = zeile.querySelector("[data-pos]");
       regler.value = res.g0;
       regler.setAttribute("aria-valuetext", `ab ${meter(res.g0 * 125)}`);
     }
@@ -99,7 +119,7 @@ function hinzufuegen(art) {
   const r = berechne(cfgAktuell());
   if (!r.oeffnungen[zustand.aktiv]) {
     zustand.oeffnungen.pop(); zustand.aktiv = -1;
-    $("oeffnungHinweis").textContent = `Für ${art === "tuer" ? "eine Tür" : "ein weiteres Fenster"} ist kein Platz mehr. Verlängern Sie die Wand oder verschieben Sie die anderen Öffnungen.`;
+    $("oeffnungHinweis").textContent = `Für ${art === "tuer" ? "eine weitere Tür" : "ein weiteres Fenster"} ist kein Platz mehr. Verlängern Sie die Wand oder verschieben Sie die anderen Öffnungen.`;
     $("oeffnungHinweis").hidden = false;
     return;
   }

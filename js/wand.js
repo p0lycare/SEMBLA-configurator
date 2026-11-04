@@ -25,11 +25,28 @@ export const AUSGLEICH_MIN_MM = 60;
 // Kennwerte der Rohwand (sembla.de/produkt).
 export const ROHWAND = { flaechengewicht_kg_m2: 167, schalldaemmmass_db: 47, brandschutz: "F60" };
 
-// Öffnungen im Raster: Breite in Rastern, Unterkante und Höhe in Lagen.
+// Öffnungen im Raster: Breite in Rastern (12,5 cm), Unterkante (Brüstung) und Höhe in Lagen (20 cm).
+// Voreinstellung und wählbarer Bereich. Breite Öffnungen prüft das Planungsteam (Sturz).
 export const OEFFNUNGEN = {
-  tuer: { name: "Tür", masse: "1,00 × 2,20 m", breite_grid: 8, l0: 0, lagen: 11, max: 1 },
-  fenster: { name: "Fenster", masse: "1,00 × 1,20 m", breite_grid: 8, l0: 4, lagen: 6, max: 8 },
+  tuer: { name: "Tür", breite_grid: 8, l0: 0, lagen: 11, max: 4,
+    bereich: { b: [6, 16], h: [10, 13], u: [0, 0] } },
+  fenster: { name: "Fenster", breite_grid: 8, l0: 4, lagen: 6, max: 8,
+    bereich: { b: [4, 20], h: [2, 10], u: [1, 7] } },
 };
+
+/** Maße einer Öffnung aus der Eingabe {art, b?, h?, u?}, auf den wählbaren Bereich begrenzt. */
+export function oeffnungsMasse(o) {
+  const def = OEFFNUNGEN[o.art], B = def.bereich;
+  const in_ = (x, [a, z], std) => (Number.isInteger(x) ? Math.min(Math.max(x, a), z) : std);
+  return { b: in_(o.b, B.b, def.breite_grid), h: in_(o.h, B.h, def.lagen), u: in_(o.u, B.u, def.l0) };
+}
+
+/** Maßtext, z. B. „1,00 × 2,20 m“ bzw. „1,00 × 1,20 m, Brüstung 0,80 m“. */
+export function masseText(o) {
+  const { b, h, u } = oeffnungsMasse(o);
+  const z = (mm) => (mm / 1000).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 3 });
+  return `${z(b * GRID)} × ${z(h * 200)} m${o.art === "fenster" ? `, Brüstung ${z(u * 200)} m` : ""}`;
+}
 
 // Mindestbreite der Wandstücke neben und zwischen Öffnungen (2 Raster = ein i2).
 const RAND_MIN_GRID = 2;
@@ -61,16 +78,13 @@ function geometrischOk(N, liste) {
   return rest >= RAND_MIN_GRID && !FORBIDDEN_N.has(rest);
 }
 
-const oeffnung = (o) => {
-  const def = OEFFNUNGEN[o.art];
-  return new Opening(o.g0, o.g1, def.l0, def.l0 + def.lagen, o.art);
-};
+const oeffnung = (o) => new Opening(o.g0, o.g1, o.l0, o.l1, o.art);
 
 // Baubarkeit laut Rechenkern (inkl. Fugenversatz). Über manchen Türstürzen meldet der Kern einen
 // Versatzkonflikt; solche Positionen bietet der Konfigurator nicht an.
 const baubarCache = new Map();
 function baubar(L, H, liste) {
-  const key = `${L}|${H}|${liste.map((o) => o.art + o.g0).sort().join(",")}`;
+  const key = `${L}|${H}|${liste.map((o) => `${o.art}${o.g0}-${o.g1}/${o.l0}-${o.l1}`).sort().join(",")}`;
   if (!baubarCache.has(key)) {
     let ok = false;
     try {
@@ -98,7 +112,7 @@ function freieMitte(N, breite, liste) {
  * Löst die Öffnungsliste zu baubaren Positionen auf. Jede Öffnung rastet auf die nächstgelegene
  * Position, an der sie zusammen mit den bereits gesetzten baubar ist. Die zuletzt bewegte
  * Öffnung (`aktiv`) wird zuletzt gesetzt, damit sie sich an die anderen anpasst.
- * Rückgabe je Eingabe-Index: {art, g0, g1} oder null (kein Platz).
+ * Rückgabe je Eingabe-Index: {art, g0, g1, l0, l1} oder null (kein Platz bzw. zu hoch).
  */
 export function oeffnungenAufloesen(L, H, eingabe, aktiv = -1) {
   const N = L / GRID, lagen = Math.floor(H / 200);
@@ -107,15 +121,15 @@ export function oeffnungenAufloesen(L, H, eingabe, aktiv = -1) {
   const gesetzt = [], ergebnis = eingabe.map(() => null);
   for (const i of reihenfolge) {
     const { art, pos } = eingabe[i];
-    const def = OEFFNUNGEN[art];
-    if (!def || def.l0 + def.lagen >= lagen) continue;    // mindestens eine Lage über der Öffnung
-    const b = def.breite_grid;
+    if (!OEFFNUNGEN[art]) continue;
+    const { b, h, u } = oeffnungsMasse(eingabe[i]);
+    if (u + h >= lagen) continue;    // mindestens eine Lage über der Öffnung
     const wunsch = Number.isFinite(pos) ? pos : freieMitte(N, b, gesetzt);
     const kandidaten = [];
     for (let g = RAND_MIN_GRID; g + b <= N - RAND_MIN_GRID; g++) kandidaten.push(g);
     kandidaten.sort((a, c) => Math.abs(a - wunsch) - Math.abs(c - wunsch) || a - c);
     for (const g0 of kandidaten) {
-      const neu = [...gesetzt, { art, g0, g1: g0 + b }];
+      const neu = [...gesetzt, { art, g0, g1: g0 + b, l0: u, l1: u + h }];
       if (geometrischOk(N, neu) && baubar(L, H, neu)) { gesetzt.push(neu[neu.length - 1]); ergebnis[i] = neu[neu.length - 1]; break; }
     }
   }
@@ -282,7 +296,7 @@ export function zusammenfassung(cfg, r) {
   const teile = [`Wand ${m(k.laenge_mm)} × ${m(k.raumhoehe_mm)} m`];
   const tueren = r.oeffnungen.filter((o) => o && o.art === "tuer").length;
   const fenster = r.oeffnungen.filter((o) => o && o.art === "fenster").length;
-  if (tueren) teile.push(`${tueren} Tür`);
+  if (tueren) teile.push(`${tueren} ${tueren === 1 ? "Tür" : "Türen"}`);
   if (fenster) teile.push(`${fenster} Fenster`);
   if (cfg.fassade) teile.push(`Fassade: ${cfg.fassade.name}`);
   if (cfg.innen) teile.push(`Innen: ${cfg.innen.name}`);
