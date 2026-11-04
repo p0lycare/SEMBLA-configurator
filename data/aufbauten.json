@@ -1,0 +1,696 @@
+{
+  "_hinweis": "Aufbauvarianten des Konfigurators. Neue Fassaden- oder Innenaufbauten hier ergänzen, ohne Code zu ändern. Schichten laufen von der Steinoberfläche nach außen (Fassade) bzw. nach innen (Innenausbau). Alle Maße in mm. Herstellernamen erst nach Freigabe eintragen. „freigegeben“: nur diese Varianten bietet der Konfigurator zur Auswahl an; die übrigen bleiben für ältere Links rechenbar.",
+  "fassaden": [
+    {
+      "id": "sicht",
+      "name": "Ohne Fassade",
+      "kurz": "Sichtmauerwerk mit Nut-Raster, z. B. für Innenwände oder Ausfachungen unter Dach.",
+      "uk": null,
+      "achsraster_mm": null,
+      "flaechengewicht_kg_m2": 0,
+      "schichten": [],
+      "freigegeben": true
+    },
+    {
+      "id": "schindel",
+      "name": "Keramik-Schindel auf Holz-UK",
+      "kurz": "Kleinformatige Keramik-Schindeln auf Holzlattung, gedämmt mit Mineralwolle im Gefach und winddichter Holzfaserplatte. Aufbau der SEMBLA-Demowand.",
+      "linie": "Holz-UK mit Mineralwolle & Holzfaser",
+      "uk": "holz",
+      "achsraster_mm": 625,
+      "flaechengewicht_kg_m2": 60,
+      "rueckbau": "Schindeln abschrauben, Lattung lösen, Holzfaserplatte und Mineralwolle sortenrein abnehmen.",
+      "schraube": {
+        "bezeichnung": "Holzbauschraube Konterlatte → KVH",
+        "durchmesser_mm": 6,
+        "durch": [
+          "konterlatte",
+          "unterdeckplatte"
+        ],
+        "in": "kvh",
+        "einbindung_min_mm": 50,
+        "abstand_stein_min_mm": 4,
+        "lambda": 50,
+        "abstand_mm": 300
+      },
+      "schichten": [
+        {
+          "id": "kvh",
+          "name": "KVH 60 × {d} auf FA-Verbindern",
+          "art": "staender",
+          "dicke": 60,
+          "breite": 60,
+          "material": "holz",
+          "lambda": 0.13
+        },
+        {
+          "id": "daemmung",
+          "name": "Mineralwolle WLS 032 {d} mm",
+          "art": "feld",
+          "dicke": 60,
+          "parallel": true,
+          "material": "mineralwolle",
+          "lambda": 0.032,
+          "mu": 1,
+          "kapillar": false
+        },
+        {
+          "id": "dampfbremse",
+          "name": "Dampfbremse, luftdicht verklebt",
+          "art": "platte",
+          "dicke": 1,
+          "material": "bahn",
+          "sd": 2,
+          "nur_ohne_luftdichte_innenseite": true
+        },
+        {
+          "id": "unterdeckplatte",
+          "name": "Holzfaserplatte λD 0,040 {da} mm, winddicht",
+          "art": "platte",
+          "dicke": 80,
+          "material": "holzfaser_dunkel",
+          "lambda": 0.042,
+          "mu": 3,
+          "rho": 160,
+          "holz_feuchte_max": 0.03
+        },
+        {
+          "id": "konterlatte",
+          "name": "Konterlatte 24 × 50, Hinterlüftung 24 mm",
+          "art": "latte_v",
+          "dicke": 24,
+          "breite": 50,
+          "material": "holz"
+        },
+        {
+          "id": "traglatte",
+          "name": "Traglatte 24 × 48, Abstand 150",
+          "art": "latte_h",
+          "dicke": 24,
+          "breite": 48,
+          "abstand": 150,
+          "material": "holz"
+        },
+        {
+          "id": "bekleidung",
+          "name": "Keramik-Schindel 445 × 215, Deckung 150",
+          "art": "schindel",
+          "dicke": 35,
+          "breite": 445,
+          "hoehe": 215,
+          "deckung": 150,
+          "material": "keramik"
+        }
+      ],
+      "hinterlueftet": true,
+      "daemmstufen": {
+        "schichten": {
+          "kvh": 0,
+          "daemmung": 0
+        },
+        "dicken": [
+          60,
+          80,
+          100,
+          120,
+          140,
+          160,
+          180,
+          200,
+          240
+        ],
+        "aussen": {
+          "schicht": "unterdeckplatte",
+          "dicken": [
+            60,
+            80,
+            100,
+            120,
+            140,
+            160,
+            180,
+            200
+          ]
+        }
+      },
+      "belueftung_ab": "konterlatte",
+      "freigegeben": true
+    },
+    {
+      "id": "holzleiste",
+      "name": "Holzleisten auf Holz-UK",
+      "kurz": "Horizontale Rhombus-Leisten mit offener Fuge auf Konterlattung, gedämmt mit Mineralwolle im Gefach und winddichter Holzfaserplatte.",
+      "linie": "Holz-UK mit Mineralwolle & Holzfaser",
+      "uk": "holz",
+      "achsraster_mm": 625,
+      "flaechengewicht_kg_m2": 32,
+      "rueckbau": "Leisten aus den Clips lösen, Lattung abschrauben, Holzfaserplatte und Mineralwolle sortenrein abnehmen.",
+      "schraube": {
+        "bezeichnung": "Holzbauschraube Konterlatte → KVH",
+        "durchmesser_mm": 6,
+        "durch": [
+          "konterlatte",
+          "unterdeckplatte"
+        ],
+        "in": "kvh",
+        "einbindung_min_mm": 50,
+        "abstand_stein_min_mm": 4,
+        "lambda": 50,
+        "abstand_mm": 300
+      },
+      "schichten": [
+        {
+          "id": "kvh",
+          "name": "KVH 60 × {d} auf FA-Verbindern",
+          "art": "staender",
+          "dicke": 60,
+          "breite": 60,
+          "material": "holz",
+          "lambda": 0.13
+        },
+        {
+          "id": "daemmung",
+          "name": "Mineralwolle WLS 032 {d} mm",
+          "art": "feld",
+          "dicke": 60,
+          "parallel": true,
+          "material": "mineralwolle",
+          "lambda": 0.032,
+          "mu": 1,
+          "kapillar": false
+        },
+        {
+          "id": "dampfbremse",
+          "name": "Dampfbremse, luftdicht verklebt",
+          "art": "platte",
+          "dicke": 1,
+          "material": "bahn",
+          "sd": 2,
+          "nur_ohne_luftdichte_innenseite": true
+        },
+        {
+          "id": "unterdeckplatte",
+          "name": "Holzfaserplatte λD 0,040 {da} mm, winddicht",
+          "art": "platte",
+          "dicke": 60,
+          "material": "holzfaser_dunkel",
+          "lambda": 0.042,
+          "mu": 3,
+          "rho": 160,
+          "holz_feuchte_max": 0.03
+        },
+        {
+          "id": "konterlatte",
+          "name": "Konterlatte 24 × 50, Hinterlüftung 24 mm",
+          "art": "latte_v",
+          "dicke": 24,
+          "breite": 50,
+          "material": "holz"
+        },
+        {
+          "id": "bekleidung",
+          "name": "Rhombus-Leiste 27 × 68, Fuge 12",
+          "art": "leiste_h",
+          "dicke": 27,
+          "hoehe": 68,
+          "fuge": 12,
+          "material": "laerche"
+        }
+      ],
+      "hinterlueftet": true,
+      "daemmstufen": {
+        "schichten": {
+          "kvh": 0,
+          "daemmung": 0
+        },
+        "dicken": [
+          60,
+          80,
+          100,
+          120,
+          140,
+          160,
+          180,
+          200,
+          240
+        ],
+        "aussen": {
+          "schicht": "unterdeckplatte",
+          "dicken": [
+            60,
+            80,
+            100,
+            120,
+            140,
+            160,
+            180,
+            200
+          ]
+        }
+      },
+      "belueftung_ab": "konterlatte",
+      "freigegeben": true
+    },
+    {
+      "id": "terrakotta",
+      "name": "Terrakotta-Paneel auf Alu-UK",
+      "kurz": "Stranggepresste Ziegelpaneele in Klammern auf Aluminium-Unterkonstruktion, gedämmt mit Mineralwolle.",
+      "linie": "Klassisch: Metall & Steinwolle",
+      "uk": "alu",
+      "achsraster_mm": 625,
+      "flaechengewicht_kg_m2": 50,
+      "rueckbau": "Paneele aus den Klammern heben, Profile und Wandhalter abschrauben, Mineralwolle sortenrein abnehmen.",
+      "schichten": [
+        {
+          "id": "halter",
+          "name": "Alu-Wandhalter {d} mm auf FA-Verbindern",
+          "art": "halter",
+          "dicke": 160,
+          "breite": 40,
+          "hoehe": 80,
+          "material": "alu"
+        },
+        {
+          "id": "daemmung",
+          "name": "Mineralwolle {d} mm, kaschiert",
+          "art": "platte",
+          "dicke": 120,
+          "parallel": true,
+          "material": "mineralwolle",
+          "lambda": 0.035,
+          "mu": 1,
+          "kapillar": false
+        },
+        {
+          "id": "profil",
+          "name": "Alu-T-Profil, vertikal",
+          "art": "latte_v",
+          "dicke": 50,
+          "breite": 80,
+          "material": "alu"
+        },
+        {
+          "id": "bekleidung",
+          "name": "Terrakotta-Paneel, Höhe 300, Fuge 8",
+          "art": "paneel",
+          "dicke": 30,
+          "breite": 1250,
+          "hoehe": 300,
+          "fuge": 8,
+          "material": "terrakotta"
+        }
+      ],
+      "hinterlueftet": true,
+      "daemmstufen": {
+        "schichten": {
+          "halter": 40,
+          "daemmung": 0
+        },
+        "dicken": [
+          100,
+          120,
+          140,
+          160,
+          180,
+          200,
+          220,
+          240,
+          260,
+          280,
+          300,
+          320
+        ]
+      },
+      "belueftung_ab": "profil",
+      "freigegeben": false
+    },
+    {
+      "id": "faserzement",
+      "name": "Großformatplatte auf Alu-UK",
+      "kurz": "Großformatige, durchgefärbte Faserzementplatten, verdeckt befestigt. Plattenfugen liegen im SEMBLA-Raster.",
+      "linie": "Klassisch: Metall & Steinwolle",
+      "uk": "alu",
+      "achsraster_mm": 625,
+      "flaechengewicht_kg_m2": 28,
+      "rueckbau": "Platten von den Agraffen abheben, Profile und Wandhalter abschrauben, Mineralwolle sortenrein abnehmen.",
+      "schichten": [
+        {
+          "id": "halter",
+          "name": "Alu-Wandhalter {d} mm auf FA-Verbindern",
+          "art": "halter",
+          "dicke": 160,
+          "breite": 40,
+          "hoehe": 80,
+          "material": "alu"
+        },
+        {
+          "id": "daemmung",
+          "name": "Mineralwolle {d} mm, kaschiert",
+          "art": "platte",
+          "dicke": 120,
+          "parallel": true,
+          "material": "mineralwolle",
+          "lambda": 0.035,
+          "mu": 1,
+          "kapillar": false
+        },
+        {
+          "id": "profil",
+          "name": "Alu-T-Profil, vertikal",
+          "art": "latte_v",
+          "dicke": 50,
+          "breite": 80,
+          "material": "alu"
+        },
+        {
+          "id": "bekleidung",
+          "name": "Faserzementplatte 1250 × 2500, Fuge 8",
+          "art": "paneel",
+          "dicke": 10,
+          "breite": 1250,
+          "hoehe": 2500,
+          "fuge": 8,
+          "material": "faserzement"
+        }
+      ],
+      "hinterlueftet": true,
+      "daemmstufen": {
+        "schichten": {
+          "halter": 40,
+          "daemmung": 0
+        },
+        "dicken": [
+          100,
+          120,
+          140,
+          160,
+          180,
+          200,
+          220,
+          240,
+          260,
+          280,
+          300,
+          320
+        ]
+      },
+      "belueftung_ab": "profil",
+      "freigegeben": false
+    }
+  ],
+  "innen": [
+    {
+      "id": "sicht",
+      "name": "Sichtmauerwerk",
+      "kurz": "Unverkleidet, das Nut-Raster bleibt sichtbar und nutzbar.",
+      "flaechengewicht_kg_m2": 0,
+      "achsraster_mm": null,
+      "schichten": [],
+      "luftdicht": false,
+      "freigegeben": true
+    },
+    {
+      "id": "lehm",
+      "name": "Lehmbauplatte",
+      "kurz": "Installationsebene aus Latten auf IA-Verbindern, darauf Lehmbauplatten.",
+      "flaechengewicht_kg_m2": 35,
+      "achsraster_mm": 625,
+      "schichten": [
+        {
+          "id": "latte",
+          "name": "Latte 27 × 58, flach",
+          "art": "latte_v",
+          "dicke": 27,
+          "breite": 58,
+          "material": "holz",
+          "lambda": 0.13,
+          "r_zwischenraum": 0.17,
+          "mu": 1
+        },
+        {
+          "id": "bekleidung",
+          "name": "Lehmbauplatte 22 mm, 625 × 1250",
+          "art": "paneel",
+          "dicke": 22,
+          "breite": 625,
+          "hoehe": 1250,
+          "fuge": 2,
+          "material": "lehm",
+          "lambda": 0.35,
+          "mu": 8
+        }
+      ],
+      "luftdicht": false,
+      "freigegeben": false
+    },
+    {
+      "id": "lehm_putz",
+      "name": "Lehmbauplatte verputzt",
+      "kurz": "Installationsebene aus Latten auf IA-Verbindern, darauf Lehmbauplatten, vollflächig mit Lehmputz. Der Putz ist die luftdichte Ebene.",
+      "flaechengewicht_kg_m2": 50,
+      "achsraster_mm": 625,
+      "schichten": [
+        {
+          "id": "latte",
+          "name": "Latte 27 × 58, flach",
+          "art": "latte_v",
+          "dicke": 27,
+          "breite": 58,
+          "material": "holz",
+          "lambda": 0.13,
+          "r_zwischenraum": 0.17,
+          "mu": 1
+        },
+        {
+          "id": "bekleidung",
+          "name": "Lehmbauplatte 22 mm, 625 × 1250",
+          "art": "paneel",
+          "dicke": 22,
+          "breite": 625,
+          "hoehe": 1250,
+          "fuge": 2,
+          "material": "lehm",
+          "lambda": 0.35,
+          "mu": 8
+        },
+        {
+          "id": "putz",
+          "name": "Lehmputz 10 mm, Stöße überputzt",
+          "art": "platte",
+          "dicke": 10,
+          "material": "lehmputz",
+          "lambda": 0.8,
+          "mu": 8
+        }
+      ],
+      "luftdicht": true,
+      "freigegeben": false
+    },
+    {
+      "id": "trockenbau",
+      "name": "Trockenbau",
+      "kurz": "Installationsebene aus Latten auf IA-Verbindern, darauf Gipsfaserplatten.",
+      "flaechengewicht_kg_m2": 17,
+      "achsraster_mm": 625,
+      "schichten": [
+        {
+          "id": "latte",
+          "name": "Latte 27 × 58, flach",
+          "art": "latte_v",
+          "dicke": 27,
+          "breite": 58,
+          "material": "holz",
+          "lambda": 0.13,
+          "r_zwischenraum": 0.17,
+          "mu": 1
+        },
+        {
+          "id": "bekleidung",
+          "name": "Gipsfaserplatte 12,5 mm, 1250 × 2500",
+          "art": "paneel",
+          "dicke": 12.5,
+          "breite": 1250,
+          "hoehe": 2500,
+          "fuge": 2,
+          "material": "gipsfaser",
+          "lambda": 0.32,
+          "mu": 13
+        }
+      ],
+      "luftdicht": false,
+      "freigegeben": false
+    },
+    {
+      "id": "trockenbau_putz",
+      "name": "Trockenbau verputzt",
+      "kurz": "Installationsebene 27 mm aus Latten auf IA-Verbindern, mit Mineralwolle gedämmt, darauf Gipsfaserplatten, vollflächig verputzt. Der Putz ist die luftdichte Ebene; Steckdosen und Schalter in flachen, luftdichten Hohlwanddosen.",
+      "flaechengewicht_kg_m2": 30,
+      "achsraster_mm": 625,
+      "schichten": [
+        {
+          "id": "latte",
+          "name": "Latte 27 × 58, flach",
+          "art": "latte_v",
+          "dicke": 27,
+          "breite": 58,
+          "material": "holz",
+          "lambda": 0.13,
+          "r_zwischenraum": 0.17,
+          "mu": 1
+        },
+        {
+          "id": "daemmung",
+          "name": "Mineralwolle WLS 035, 30 mm auf 27 mm geklemmt",
+          "art": "feld",
+          "dicke": 27,
+          "parallel": true,
+          "material": "mineralwolle",
+          "lambda": 0.035,
+          "mu": 1,
+          "kapillar": false
+        },
+        {
+          "id": "bekleidung",
+          "name": "Gipsfaserplatte 12,5 mm, 1250 × 2500",
+          "art": "paneel",
+          "dicke": 12.5,
+          "breite": 1250,
+          "hoehe": 2500,
+          "fuge": 2,
+          "material": "gipsfaser",
+          "lambda": 0.32,
+          "mu": 13
+        },
+        {
+          "id": "putz",
+          "name": "Gipsputz 10 mm, Stöße überputzt",
+          "art": "platte",
+          "dicke": 10,
+          "material": "gipsputz",
+          "lambda": 0.51,
+          "mu": 10
+        }
+      ],
+      "luftdicht": true,
+      "freigegeben": true
+    }
+  ],
+  "waerme": {
+    "_hinweis": "Kennwerte für den U-Wert (DIN EN ISO 6946). λ sind Bemessungswerte nach DIN 4108-4 (Wärmeleitstufe WLS, Produkte mit Zulassung, Kategorie II); für den Nachweis gilt der λB des eingesetzten Produkts. Steinwiderstand und Halter-Wärmebrücke sind Annahmen, bis Messwerte vorliegen.",
+    "Rsi": 0.13,
+    "Rse": 0.04,
+    "Rse_hinterlueftet": 0.13,
+    "stein": {
+      "R": 0.169,
+      "quelle": "Stein: λB = 0,74 W/(m·K) für Betonsteine nach DIN 4108-4, Tab. 1, Z. 4.4.1, auf 125 mm; äquivalente Wärmeleitfähigkeit nach DIN EN 1745 noch nicht bestimmt",
+      "mu": 15,
+      "quelle_mu": "Stein: μ = 15 angenommen (trocken gefügt, Fugen mindern den Widerstand)"
+    },
+    "halter": {
+      "chi_W_K": 0.015,
+      "je_m2": 2.13,
+      "quelle": "Annahme: Alu-Wandhalter mit Thermostopp, χ = 0,015 W/K; ein Halter je 0,625 × 0,75 m"
+    },
+    "ziele": [
+      {
+        "id": "geg",
+        "name": "GEG",
+        "U": 0.24,
+        "text": "Höchstwert für Außenwände nach GEG/GModG Anlage 7. Im Neubau rechnet das Referenzgebäude mit 0,28."
+      },
+      {
+        "id": "beg",
+        "name": "BEG-Förderung",
+        "U": 0.2,
+        "text": "Mindestanforderung der BEG-Einzelmaßnahmen für die Dämmung von Außenwänden im Bestand."
+      },
+      {
+        "id": "eh40",
+        "name": "Effizienzhaus 40",
+        "U": 0.14,
+        "text": "Übliche Größenordnung für Effizienzhaus 40 und Neubauförderung. Dort zählt das ganze Gebäude, nicht das einzelne Bauteil."
+      }
+    ],
+    "feuchte": {
+      "_hinweis": "Tauwasserschutz nach DIN 4108-3:2018-10: Klima nach Tabelle A.3, Rsi/Rse nach A.2.2, δ0 = 2·10⁻¹⁰ kg/(m·s·Pa), Grenzwerte nach 5.2.2 (1,0 kg/m², 0,5 kg/m² an kapillar nicht wasseraufnahmefähigen Schichten, Holz +5 %, Holzwerkstoffe +3 %; Holzfaser hier vorsichtig wie Holzwerkstoff). bahn_verhaeltnis_min: Planungsregel R außen / R innen ≥ 1,5 an der Dampfbremse (DIN-Grenze aus dem Taupunkt ≈ 1,33). μ-Werte nach DIN 4108-4 bzw. DIN EN ISO 10456.",
+      "Rsi": 0.25,
+      "Rse": 0.04,
+      "tau": {
+        "theta_i": 20,
+        "phi_i": 0.5,
+        "theta_e": -5,
+        "phi_e": 0.8,
+        "stunden": 2160
+      },
+      "verdunstung": {
+        "p_i": 1200,
+        "p_e": 1200,
+        "p_ebene": 1700,
+        "stunden": 2160
+      },
+      "grenzen": {
+        "gesamt_kg_m2": 1.0,
+        "nicht_saugend_kg_m2": 0.5
+      },
+      "bahn_verhaeltnis_min": 1.5
+    }
+  },
+  "materialien": {
+    "stein": "#BDBEB8",
+    "holz": "#D9B47C",
+    "laerche": "#B9824F",
+    "holzfaser": "#C4A06A",
+    "holzfaser_dunkel": "#A8845A",
+    "bahn": "#2C8C80",
+    "keramik": "#8C4636",
+    "terrakotta": "#B5603F",
+    "faserzement": "#7E8487",
+    "alu": "#B8C0C4",
+    "mineralwolle": "#D9CE8E",
+    "lehm": "#D8C29E",
+    "gipsfaser": "#ECEBE6",
+    "stahl": "#6B747A",
+    "verbinder": "#1FAA5F",
+    "lehmputz": "#CDB48C",
+    "gipsputz": "#F3F2EE"
+  },
+  "verbinder": {
+    "_hinweis": "Vorbemessung der Verbinder (FA und IA) mit Bemessungswerten F_Rd je Lastrichtung, Verbinder in Steinmitte. Der FA-Verbinder wird vorerst wie der IA-Verbinder angesetzt. Lastrichtungen: Zug = senkrecht zur Wand, Querlast parallel = entlang der senkrechten Nut (Eigengewicht), Querlast senkrecht = quer zur Nut. Interaktion Zug + Querlast (β_N)^1,5 + (β_V)^1,5 ≤ 1 wie bei Ankern (DIN EN 1992-4). Zug hält der Verbinder formschlüssig; entlang der Nut nur über die Klemmung, die die Schraube zum Holz mitspannt und die beim Schwinden des Holzes nachlässt. Deshalb tragen Auflager das Eigengewicht (außen Fußauflager und Auflager über Öffnungen, innen Schwelle). Herleitung in der SEMBLA Planning Suite.",
+    "rd_kN": {
+      "zug": 0.6,
+      "quer_parallel": 0.3,
+      "quer_senkrecht": 1.8
+    },
+    "interaktion_exponent": 1.5,
+    "last": {
+      "gamma_G": 1.35,
+      "gamma_Q": 1.5,
+      "qp_kN_m2": 0.65,
+      "cpe1": -1.4,
+      "text": "Windzone 2 Binnenland, Gebäudehöhe bis 10 m (q_p = 0,65 kN/m²), Wandbereich A an der Gebäudeecke mit c_pe,1 = −1,4 nach DIN EN 1991-1-4/NA, voller Sog auf die Unterkonstruktion."
+    },
+    "windzonen_qp": {
+      "h10": [
+        0.5,
+        0.65,
+        0.8,
+        0.95
+      ],
+      "h18": [
+        0.65,
+        0.8,
+        0.95,
+        1.15
+      ],
+      "h25": [
+        0.75,
+        0.9,
+        1.1,
+        1.3
+      ]
+    },
+    "fussauflager": true,
+    "sturzauflager": true,
+    "schwelle_innen": true
+  }
+}

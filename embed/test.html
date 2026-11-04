@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Einbettungstest</title>
+<style>
+  body { margin: 0; font: 16px/1.4 system-ui, sans-serif; background: #fff; color: #1E1E1E; }
+  .huelle { max-width: 1280px; margin: 0 auto; padding: 24px 16px; }
+  #protokoll { position: fixed; right: 12px; bottom: 12px; width: 340px; max-height: 40vh; overflow: auto; background: #1E1E1E; color: #FDFDFD; font: 12px/1.4 ui-monospace, monospace; padding: 10px; border-radius: 8px; }
+</style>
+</head>
+<body>
+<div class="huelle">
+  <h1>Einbettungstest (lokal)</h1>
+  <p>Simuliert sembla.de/produkt: der Konfigurator kommt von einem anderen Ursprung (127.0.0.1 statt localhost), wie von konfigurator.sembla.de. Nachrichten erscheinen unten rechts. Mit <code>?src=…</code> lässt sich eine andere Adresse testen.</p>
+  <button type="button" onclick="alert('Projektformular würde sich öffnen')">Jetzt Projekt starten</button>
+  <div id="sembla-konfigurator">
+    <iframe title="SEMBLA® Konfigurator" data-cookieconsent="ignore" style="display:block;width:100%;height:1800px;border:0"></iframe>
+  </div>
+</div>
+<pre id="protokoll"></pre>
+<script>
+  var frame = document.querySelector("iframe");
+  frame.src = new URLSearchParams(location.search).get("src") || "http://127.0.0.1:8000/?compact=1";
+  window.addEventListener("message", function (e) {
+    if (e.source !== frame.contentWindow || !e.data || typeof e.data.typ !== "string") return;
+    if (e.data.typ === "sembla-konfigurator:hoehe") frame.style.height = e.data.hoehe + "px";
+    document.getElementById("protokoll").textContent += JSON.stringify(e.data) + "\n";
+  });
+</script>
+</body>
+</html>

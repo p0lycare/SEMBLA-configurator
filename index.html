@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SEMBLA® Konfigurator</title>
+<meta name="description" content="Planen Sie spielerisch eine SEMBLA®-Wand: Raster, Vorspannung, Fassade und Rückbau.">
+<link rel="stylesheet" href="css/app.css">
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<div class="app">
+
+  <header class="kopf">
+    <img class="logo" src="assets/sembla-logo.svg" alt="SEMBLA®" width="200" height="39">
+    <p class="kicker">Konfigurator</p>
+    <h1>Ihre Wand in 2 Minuten</h1>
+    <p class="lead">Wählen Sie Maße, Fassade und Innenausbau. Sehen Sie, wie das Raster, die Vorspannung und die lösbaren Verbinder zusammenspielen, und wie sich alles wieder zurückbauen lässt.</p>
+  </header>
+  <p class="desktop-hinweis">Tipp: Am Laptop oder Desktop sehen Sie Eingaben, Modell und Kennwerte bequemer im Überblick.</p>
+
+  <main class="layout">
+
+    <section class="buehne" aria-label="Vorschau">
+      <div class="buehne-kopf">
+        <div class="tabs" role="tablist" aria-label="Darstellung">
+          <button type="button" role="tab" id="tab3d" aria-controls="ansicht3d" aria-selected="true">3D-Modell</button>
+          <button type="button" role="tab" id="tab2d" aria-controls="ansicht2d" aria-selected="false" tabindex="-1">Ansicht</button>
+        </div>
+        <span class="mono klein" id="masse"></span>
+      </div>
+
+      <div id="ansicht3d" role="tabpanel" aria-labelledby="tab3d">
+        <div class="viewer">
+          <canvas id="canvas3d" role="img" aria-label="3D-Modell der Wand. Ziehen zum Drehen, Mausrad oder zwei Finger zum Zoomen."></canvas>
+          <p class="viewer-hint mono">Ziehen zum Drehen · Zoomen mit Mausrad oder zwei Fingern</p>
+          <p class="viewer-fehler" id="glFehler" hidden>Das 3D-Modell braucht WebGL. Die Ansicht zeigt dieselbe Wand in 2D.</p>
+        </div>
+        <div class="steuerung">
+          <div class="pills klein-pills">
+            <button type="button" data-blick="aussen">Außen</button>
+            <button type="button" data-blick="schraeg">Schräg</button>
+            <button type="button" data-blick="innen">Innen</button>
+          </div>
+          <div class="pills klein-pills" id="ebenen"></div>
+        </div>
+        <label class="regler">
+          <span class="zeile"><b>Schichten auffächern</b></span>
+          <input type="range" id="faechern" min="0" max="100" value="0">
+        </label>
+        <label class="regler rueckbau">
+          <span class="zeile"><b>Rückbau</b><span class="klein" id="rueckbauSchritt"></span></span>
+          <input type="range" id="rueckbau" min="0" max="100" value="0">
+        </label>
+        <p class="erklaerung" id="rueckbauText"></p>
+      </div>
+
+      <div id="ansicht2d" role="tabpanel" aria-labelledby="tab2d" hidden>
+        <div class="legende mono klein">
+          <span><i class="sw" style="background:#B4B4AE"></i>i3 · 37,5 cm</span>
+          <span><i class="sw" style="background:#CFCFCA"></i>i2 · 25 cm</span>
+          <span><i class="sw linie"></i>Spannachse</span>
+          <span><i class="sw punkt"></i>Verbinder Fassade</span>
+        </div>
+        <div class="zeichnung" id="zeichnung"></div>
+      </div>
+    </section>
+
+    <section class="panel eingaben" aria-label="Eingaben">
+      <div class="schritt">
+        <p class="kicker"><span class="nr">1</span> Wand</p>
+        <label class="regler">
+          <span class="zeile"><b>Wandlänge</b><output id="laengeWert" class="mono"></output></span>
+          <input type="range" id="laenge" min="1000" max="12000" step="125">
+          <span class="klein">im 12,5-cm-Raster</span>
+        </label>
+        <label class="regler">
+          <span class="zeile"><b>Lichte Raumhöhe</b><output id="hoeheWert" class="mono"></output></span>
+          <input type="range" id="hoehe" min="2500" max="5000" step="50">
+          <span class="klein">Lagen à 20 cm, oben eine Ausgleichslage</span>
+        </label>
+        <fieldset>
+          <legend>Öffnungen</legend>
+          <div class="oeffnungsliste" id="oeffnungsliste"></div>
+          <div class="pills klein-pills">
+            <button type="button" id="plusTuer">+ Tür</button>
+            <button type="button" id="plusFenster">+ Fenster</button>
+          </div>
+          <p class="hinweis" id="oeffnungHinweis" role="alert" hidden></p>
+        </fieldset>
+      </div>
+
+      <div class="schritt">
+        <p class="kicker"><span class="nr">2</span> Fassade</p>
+        <div class="karten" id="fassaden" role="group" aria-label="Fassade"></div>
+        <p class="klein" id="fassadeText"></p>
+        <p class="klein" id="uKurz" aria-live="polite"></p>
+        <button type="button" class="link" id="fassadeAnfragen">Ihr Fassadensystem fehlt? Jetzt anfragen</button>
+      </div>
+
+      <div class="schritt">
+        <p class="kicker"><span class="nr">3</span> Innenseite</p>
+        <div class="pills" id="innen" role="group" aria-label="Innenseite"></div>
+        <p class="klein" id="innenText"></p>
+      </div>
+    </section>
+
+    <section class="ergebnis" aria-label="Ergebnis">
+
+      <div class="kacheln" id="kacheln"></div>
+
+      <ul class="hinweisliste" id="hinweise" aria-live="polite"></ul>
+
+      <div class="cta">
+        <div class="knoepfe">
+          <a class="knopf" id="ctaTermin" href="https://business.polycare.de/meetings/andreas-kunsmann/sembla-projektgespraech" target="_blank" rel="noopener">Direkt einen Termin buchen</a>
+          <button type="button" class="knopf zweit" id="ctaDatenblatt" aria-controls="anfrage" aria-expanded="false">Ausführliches Datenblatt zur Konfiguration</button>
+        </div>
+        <form class="anfrage" id="anfrage" hidden>
+          <div class="anfrage-info">
+            <p class="kicker">Datenblatt zur Konfiguration</p>
+            <h2>Ihre Wand, komplett dokumentiert</h2>
+            <div class="anfrage-bild" id="anfrageBild" aria-hidden="true"></div>
+            <ul class="haken">
+              <li>Ansicht mit Steinverband, Spannachsen und Verbindern</li>
+              <li>Kennwerte und Wärmeschutz mit U-Wert</li>
+              <li>Vollständige Stückliste mit Mengen</li>
+              <li>BIM-Modell (IFC), CAD-Zeichnung (DXF) und Ausschreibungstext</li>
+              <li>Als PDF speichern und mit Ihrem Team teilen</li>
+            </ul>
+            <p class="anfrage-zusammenfassung" id="anfrageZusammenfassung"></p>
+          </div>
+          <div class="anfrage-formular">
+            <p class="anfrage-titel"><b>Wohin dürfen wir den Link schicken?</b></p>
+            <div class="felder">
+              <label>Vorname<input name="firstname" autocomplete="given-name" placeholder="Vorname"></label>
+              <label>Nachname<span class="pflicht" aria-hidden="true">*</span><input name="lastname" autocomplete="family-name" placeholder="Nachname" required></label>
+              <label class="breit">E-Mail<span class="pflicht" aria-hidden="true">*</span><input name="email" type="email" autocomplete="email" placeholder="name@buero.de" required></label>
+              <label class="breit">Büro / Firma<input name="company" autocomplete="organization" placeholder="Architekturbüro, Planungsbüro …"></label>
+            </div>
+            <label class="einwilligung"><input type="checkbox" name="einwilligung" required>
+              <span>Ich bin einverstanden, dass Polycare meine Angaben speichert und verarbeitet, um mir das Datenblatt zu schicken und mich zu meinem Projekt zu kontaktieren. Widerruf jederzeit möglich, siehe <a href="https://www.sembla.de/datenschutz" target="_blank" rel="noopener">Datenschutz</a>.</span></label>
+            <div class="zeile-senden"><button type="submit" class="knopf">Datenblatt anfordern</button><span class="klein" data-status role="status"></span></div>
+          </div>
+        </form>
+        <p class="klein">Vorplanung zur Orientierung. Ersetzt keine Ausführungsplanung und keine Statik. Steinverband, Spannachsen und Verbinderraster nach dem Rechenkern der SEMBLA Planungs-Suite.</p>
+      </div>
+
+      <div class="panel infos">
+        <div class="tabs" role="tablist" id="infoTabs" aria-label="Details">
+          <button type="button" role="tab" id="tab-regeln" aria-controls="info-regeln" data-tab="regeln" aria-selected="true">So funktioniert's</button>
+          <button type="button" role="tab" id="tab-teile" aria-controls="info-teile" data-tab="teile" aria-selected="false" tabindex="-1">Stückliste</button>
+          <button type="button" role="tab" id="tab-waerme" aria-controls="info-waerme" data-tab="waerme" aria-selected="false" tabindex="-1">Wärmeschutz</button>
+        </div>
+
+        <div class="info regeln" data-panel="regeln" id="info-regeln" role="tabpanel" aria-labelledby="tab-regeln">
+          <ul id="regeln"></ul>
+        </div>
+
+        <div class="info teile" data-panel="teile" id="info-teile" role="tabpanel" aria-labelledby="tab-teile" hidden>
+          <div id="stueckliste"></div>
+          <p class="klein">Draufsichten nicht maßstäblich. Steine und Spannsystem rechnet der Kern der SEMBLA Planungs-Suite. Mengen mit „ca.“ sind überschlägig und ohne Verschnitt.
+            <button type="button" class="link" id="csv">Als CSV herunterladen</button></p>
+        </div>
+
+        <div class="info waerme" data-panel="waerme" id="info-waerme" role="tabpanel" aria-labelledby="tab-waerme" hidden>
+          <div id="waerme"></div>
+        </div>
+      </div>
+
+    </section>
+  </main>
+</div>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

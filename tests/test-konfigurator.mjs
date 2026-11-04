@@ -1,0 +1,364 @@
+// Regressionstests des Konfigurators. Laufen lokal (`npm test`) und in der Action, die den
+// Rechenkern der Planungs-Suite übernimmt: nur wenn sie grün sind, geht ein neuer Kern live.
+
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { berechne, oeffnungenAufloesen, schraubenlaenge, schichtLagen, DECKENFUGE_MM, AUSGLEICH_MIN_MM } from "../js/wand.js";
+import { GRID, FORBIDDEN_N } from "../js/sembla-core.js";
+import { stueckliste, alsCsv } from "../js/stueckliste.js";
+import { auslegen, uWert, mitDaemmung } from "../js/waerme.js";
+import { feuchteschutz, ps, taupunkt } from "../js/feuchte.js";
+import { wandAlsIfc } from "../js/export-ifc.js";
+import { traglattenReihen } from "../js/aufbau-geometrie.js";
+import { freieHoehen, nachweis } from "../js/verbinder.js";
+import { wandAlsDxf } from "../js/export-dxf.js";
+import { wandAlsLv } from "../js/export-lv.js";
+import { zustandAusUrl, aufbauWahl, datenblattParameter, RECHENSTAND, STANDARD } from "../js/inhalte.js";
+
+const A = JSON.parse(readFileSync(new URL("../data/aufbauten.json", import.meta.url), "utf8"));
+const fass = (id) => A.fassaden.find((f) => f.id === id);
+const inn = (id) => A.innen.find((f) => f.id === id);
+
+let n = 0;
+const test = (name, fn) => { fn(); n++; console.log("ok -", name); };
+
+const T = { art: "tuer" }, F = { art: "fenster" };
+const VARIANTEN = { keine: [], tuer: [T], fenster: [F], tuer_2fenster: [T, F, F], fenster3: [F, F, F] };
+
+// Referenzwände: verschiedene Längen, Höhen, Öffnungen und Aufbauten.
+const FAELLE = [];
+for (const laenge_mm of [1000, 2000, 3875, 6000, 12000])
+  for (const raumhoehe_mm of [2500, 2850, 5000])
+    for (const [vname, oeffnungen] of Object.entries(VARIANTEN))
+      for (const [f, i] of [["schindel", "lehm"], ["terrakotta", "trockenbau"], ["sicht", "sicht"]])
+        FAELLE.push({ laenge_mm, raumhoehe_mm, oeffnungen, vname, fassade: fass(f), innen: inn(i) });
+const R = FAELLE.map((cfg) => ({ cfg, r: berechne(cfg) }));
+
+test("alle Referenzwände sind rechenbar und baubar", () => {
+  for (const { cfg, r } of R) {
+    assert.ok(r.w.validation.buildable, `${cfg.laenge_mm}/${cfg.vname}`);
+    assert.ok(r.w.validation.versatz_ok, `Versatz ${cfg.laenge_mm}/${cfg.vname}`);
+    assert.equal(r.kennzahlen.steine, r.w.courses.reduce((a, c) => a + c.stones.length, 0));
+    assert.ok(r.kennzahlen.spannachsen >= 1);
+  }
+});
+
+test("Wandhöhe = lichte Höhe minus Deckenfuge, Lagen 200 mm plus höchstens eine Ausgleichslage", () => {
+  for (const { cfg, r } of R) {
+    const top = r.w.courses[r.w.courses.length - 1].oberkante_mm;
+    assert.equal(top, cfg.raumhoehe_mm - r.kennzahlen.deckenfuge_mm);
+    assert.ok(r.w.courses.filter((c) => c.ausgleich).length <= 1);
+    r.w.courses.filter((c) => !c.ausgleich).forEach((c) => assert.equal(c.hoehe_mm, 200));
+    r.w.courses.filter((c) => c.ausgleich).forEach((c) => assert.ok(c.hoehe_mm >= AUSGLEICH_MIN_MM));
+    assert.ok(r.kennzahlen.deckenfuge_mm >= DECKENFUGE_MM && r.kennzahlen.deckenfuge_mm < DECKENFUGE_MM + AUSGLEICH_MIN_MM);
+  }
+});
+
+test("mehrere Öffnungen: überlappungsfrei, Wandstücke ≥ 2 Raster und nie 1 oder 4", () => {
+  for (const { r } of R) {
+    const N = r.w.length_mm / GRID;
+    const s = r.oeffnungen.filter(Boolean).sort((a, b) => a.g0 - b.g0);
+    let rand = 0;
+    for (const o of s) { const st = o.g0 - rand; assert.ok(st >= 2 && !FORBIDDEN_N.has(st)); rand = o.g1; }
+    assert.ok(N - rand >= 2 && !FORBIDDEN_N.has(N - rand));
+  }
+  const r = berechne({ laenge_mm: 12000, raumhoehe_mm: 2850, oeffnungen: [T, F, F, F], fassade: fass("sicht"), innen: inn("sicht") });
+  assert.equal(r.oeffnungen.filter(Boolean).length, 4, "12 m Wand fasst Tür + 3 Fenster");
+  assert.equal(r.w.openings.length, 4);
+});
+
+test("Öffnung rastet auf die nächste baubare Position und weicht anderen aus", () => {
+  const L = 6000, H = 2800;
+  const [t] = oeffnungenAufloesen(L, H, [{ art: "tuer", pos: 10 }]);
+  assert.ok(Math.abs(t.g0 - 10) <= 3);
+  const [a, b] = oeffnungenAufloesen(L, H, [{ art: "fenster", pos: 10 }, { art: "fenster", pos: 10 }], 1);
+  assert.equal(a.g0, 10, "die ruhende Öffnung bleibt");
+  assert.ok(b.g0 >= a.g1 + 2 || b.g1 <= a.g0 - 2, "die bewegte weicht aus");
+});
+
+test("Verbinder nach Modul 2: nur innen in einem Stein, in Lagenmitte, nie in Öffnung oder Ausgleichslage", () => {
+  for (const { r } of R) {
+    for (const p of [...r.fa.punkte, ...r.ia.punkte]) {
+      const c = r.w.courses[p.lage];
+      assert.ok(c, "Lage gefunden");
+      assert.equal(p.x % (GRID / 10 * 10), 0, "Nutraster");
+      assert.ok(c.stones.some((s) => s.x0 < p.x && p.x < s.x1), "Stoßfuge oder kein Stein");
+      assert.equal(p.y, (c.unterkante_mm + c.oberkante_mm) / 2, "Steinmitte");
+      assert.ok(!c.ausgleich, "nicht in der Ausgleichslage");
+      for (const op of r.w.openings)
+        assert.ok(!(op.g0 * GRID < p.x && p.x < op.g1 * GRID && op.l0 <= p.lage && p.lage < op.l1), "in Öffnung");
+    }
+  }
+});
+
+test("Lattensegmente liegen auf den Achsen und nie in einer Öffnung", () => {
+  for (const { r } of R) for (const s of r.fa.segmente) {
+    assert.ok(r.fa.achsen.includes(s.x));
+    assert.ok(s.y1 > s.y0);
+    for (const op of r.w.openings) {
+      const y0 = r.w.courses[op.l0].unterkante_mm, y1 = r.w.courses[op.l1 - 1].oberkante_mm;
+      assert.ok(!(op.g0 * GRID < s.x && s.x < op.g1 * GRID && s.y0 < y1 && s.y1 > y0), "Latte in Öffnung");
+    }
+  }
+});
+
+test("Ohne Aufbau gibt es keine Verbinder", () => {
+  const r = berechne({ laenge_mm: 3000, raumhoehe_mm: 2600, oeffnungen: [], fassade: fass("sicht"), innen: inn("sicht") });
+  assert.equal(r.fa.punkte.length + r.ia.punkte.length, 0);
+});
+
+test("Schraubenregel: Konterlatte 24 + Platte 80 + 50 mm Einbindung → 6 × 160, Spitze 4 mm vor dem Stein", () => {
+  const s = schraubenlaenge(fass("schindel"));
+  assert.equal(s.laenge_mm, 160);
+  assert.equal(s.durchmesser_mm, 6);
+  assert.equal(schraubenlaenge(fass("holzleiste")).laenge_mm, 140);
+  assert.equal(schraubenlaenge(fass("terrakotta")), null);
+});
+
+test("Aufbaudaten sind vollständig", () => {
+  const arten = new Set(["staender", "feld", "platte", "latte_v", "latte_h", "schindel", "leiste_h", "paneel", "halter"]);
+  for (const a of [...A.fassaden, ...A.innen]) {
+    assert.ok(a.id && a.name && a.kurz, a.id);
+    if (a.schichten.length) assert.ok(a.achsraster_mm % GRID === 0, a.id);
+    for (const s of schichtLagen(a.schichten)) {
+      assert.ok(arten.has(s.art), `${a.id}/${s.id}: Art ${s.art}`);
+      assert.ok(s.dicke > 0 && A.materialien[s.material], `${a.id}/${s.id}`);
+    }
+  }
+});
+
+test("Stückliste stimmt mit dem Rechenkern überein", () => {
+  for (const { cfg, r } of R) {
+    const g = stueckliste(r, cfg.fassade, cfg.innen);
+    const alle = g.flatMap((x) => x.teile);
+    const summe = (sym) => alle.filter((t) => t.symbol === sym).reduce((a, t) => a + t.menge, 0);
+    assert.equal(summe("i3") + summe("i2"), r.w.bom.i2 + r.w.bom.i3, "Steine");
+    assert.equal(summe("stange"), r.w.bom.gewindestangen, "Gewindestangen");
+    assert.equal(summe("bodenblech"), r.w.base_plate.teile.length, "Bodenbleche");
+    assert.equal(summe("verbinder"), r.fa.punkte.length + r.ia.punkte.length, "Verbinder");
+    alle.forEach((t) => assert.ok(t.menge > 0 && Number.isFinite(t.menge) && t.name && t.einheit, JSON.stringify(t)));
+    assert.ok(alsCsv(g).split("\r\n").length === alle.length + 1);
+  }
+});
+
+test("Wärmeschutz: jede gedämmte Fassade erreicht GEG und BEG, dünnste Kombination mit Tauwasserschutz", () => {
+  const kw = A.waerme;
+  for (const f of A.fassaden.filter((x) => x.daemmstufen)) {
+    for (const id of Object.keys(f.daemmstufen.schichten)) assert.ok(f.schichten.some((s) => s.id === id), `${f.id}/${id}`);
+    if (f.daemmstufen.aussen) assert.ok(f.schichten.some((s) => s.id === f.daemmstufen.aussen.schicht), `${f.id}: Plattenschicht`);
+    for (const i of A.innen) for (const z of kw.ziele.filter((x) => x.id !== "eh40")) {
+      const r = auslegen(f, i, kw, z.U);
+      assert.ok(r.erfuellt && r.U <= z.U, `${f.id}/${i.id}/${z.id}: U = ${r.U}`);
+      assert.ok(r.feuchte.tauwasserOk, `${f.id}/${i.id}/${z.id}: Tauwasserschutz`);
+      // Minimal: keine dünnere Kombination erfüllt Ziel und Tauwasserschutz.
+      const summe = r.daemmung_mm + (r.daemmung_aussen_mm || 0);
+      for (const d of f.daemmstufen.dicken) for (const da of f.daemmstufen.aussen ? f.daemmstufen.aussen.dicken : [null]) {
+        if (d + (da || 0) >= summe) continue;
+        const a = mitDaemmung(f, d, da);
+        if (a.schraube && !schraubenlaenge(a).laenge_mm) continue;
+        assert.ok(uWert(a, i, kw).U > z.U || !feuchteschutz(a, i, kw).ok, `${f.id}/${i.id}/${z.id}: ${d}+${da} wäre dünner`);
+      }
+      assert.ok(!r.aufbau.schichten.some((s) => /\{da?\}/.test(s.name)), "Platzhalter ersetzt");
+      if (r.aufbau.schraube) assert.ok(schraubenlaenge(r.aufbau).laenge_mm, `${f.id}: Schraube bei ${r.daemmung_mm} mm`);
+    }
+  }
+  // Plausibel: mehr Dämmung, kleinerer U-Wert.
+  const h = fass("schindel"), u = (d, da = 80) => uWert(mitDaemmung(h, d, da), inn("sicht"), kw).U;
+  assert.ok(u(60) > u(120) && u(120) > u(240) && u(60, 80) > u(60, 160));
+  assert.ok(u(120) > 0.15 && u(120) < 0.3, `U(120) = ${u(120)}`);
+});
+
+test("Tauwasserschutz: Taupunkt an der Dampfbremse und Glaser nach DIN 4108-3", () => {
+  const kw = A.waerme, f = kw.feuchte;
+  // Sättigungsdruck und Taupunkt (DIN 4108-3): 20 °C → 2337 Pa, Taupunkt bei 50 % ≈ 9,3 °C.
+  assert.ok(Math.abs(ps(20) - 2337) < 2 && Math.abs(ps(-5) - 401) < 2, `ps ${ps(20)} ${ps(-5)}`);
+  assert.ok(Math.abs(taupunkt(20, 0.5) - 9.3) < 0.05);
+  const h = fass("schindel");
+  // Ohne luftdichte Innenseite ist die Bahn die luftdichte Ebene und muss über dem Taupunkt liegen.
+  const offen = feuchteschutz(mitDaemmung(h, 120, 80), inn("lehm"), kw);
+  assert.equal(offen.luftdicht, "bahn");
+  assert.ok(!offen.bahn.ok && !offen.ok, "120 + 80 mm: Bahn zu kalt");
+  const warm = feuchteschutz(mitDaemmung(h, 60, 160), inn("lehm"), kw);
+  assert.ok(warm.bahn.ok && warm.ok && warm.bahn.verhaeltnis >= warm.bahn.verhaeltnis_min);
+  // Temperatur an der Bahn passt zum Verhältnis R außen / R innen.
+  const t = f.tau.theta_i - (f.tau.theta_i - f.tau.theta_e) / (1 + warm.bahn.verhaeltnis);
+  assert.ok(Math.abs(t - warm.bahn.theta) < 1e-9);
+  // Verputzt: luftdichte Ebene innen, Glaser entscheidet; Tauwasser an der Bahn höchstens 0,5 kg/m² und es trocknet aus.
+  const putz = feuchteschutz(mitDaemmung(h, 200, 60), inn("lehm_putz"), kw);
+  assert.equal(putz.luftdicht, "innen");
+  assert.ok(putz.glaser.tauwasser_kg_m2 > 0 && putz.glaser.grenze_kg_m2 === f.grenzen.nicht_saugend_kg_m2);
+  assert.equal(putz.ok, putz.glaser.tauwasser_kg_m2 <= 0.5 && putz.glaser.verdunstung_kg_m2 >= putz.glaser.tauwasser_kg_m2);
+  // Glaser-Bilanz: ohne Bahn und mit diffusionsoffener Dämmung kein Tauwasser; Alu-UK ohne Putz ohne luftdichte Ebene.
+  const alu = feuchteschutz(mitDaemmung(fass("terrakotta"), 160), inn("trockenbau"), kw);
+  assert.equal(alu.luftdicht, null);
+  assert.equal(alu.glaser.tauwasser_kg_m2, 0);
+  // Der Dampfdruck bleibt überall unter dem Sättigungsdruck.
+  const g = putz.glaser;
+  const p = (x) => { for (let k = 1; k < g.huelle.length; k++) { const a = g.huelle[k - 1], b = g.huelle[k]; if (x <= b.x) return a.y + (b.y - a.y) * (x - a.x) / Math.max(b.x - a.x, 1e-12); } return g.pe; };
+  g.knoten.slice(1, -1).forEach((k) => assert.ok(p(k.x) <= k.ps + 1e-6, `p > ps bei x = ${k.x}`));
+});
+
+test("Wärmeschutz in berechne: ein Wandhalter je FA-Verbinder geht in den U-Wert ein", () => {
+  const kw = A.waerme;
+  for (const id of ["terrakotta", "schindel"]) for (const o of [[], [T, F]]) for (const z of kw.ziele) {
+    const r = berechne({ laenge_mm: 6000, raumhoehe_mm: 2850, oeffnungen: o, fassade: fass(id), innen: inn("lehm"), waerme: { kennwerte: kw, ziel_U: z.U } });
+    const dichte = r.fa.punkte.length / r.kennzahlen.flaeche_m2;
+    if (fass(id).uk === "alu") assert.ok(Math.abs(r.waerme.zuschlag - kw.halter.chi_W_K * dichte) < 1e-9, "Zuschlag");
+    else assert.equal(r.waerme.zuschlag, 0);
+    assert.equal(r.fassade.daemmung_mm, r.waerme.daemmung_mm);
+    if (z.id !== "eh40") assert.ok(r.waerme.erfuellt, `${id}/${z.id}: U = ${r.waerme.U}`);
+  }
+});
+
+test("Steingeometrie: i2/i3 im Raster, 200 mm hoch, 125 mm tief", () => {
+  const S = JSON.parse(readFileSync(new URL("../data/steine.json", import.meta.url), "utf8"));
+  for (const [typ, laenge] of [["i3", 375], ["i2", 250]]) {
+    const v = S[typ].v, xs = v.filter((_, i) => i % 3 === 0), ys = v.filter((_, i) => i % 3 === 1), zs = v.filter((_, i) => i % 3 === 2);
+    assert.ok(Math.min(...xs) >= 0 && Math.max(...xs) <= laenge, typ + " Länge");
+    assert.ok(Math.min(...ys) >= 0 && Math.max(...ys) <= 200, typ + " Höhe");
+    assert.ok(Math.min(...zs) >= -125 && Math.max(...zs) <= 0, typ + " Tiefe");
+    assert.ok(S[typ].f.length % 3 === 0 && Math.max(...S[typ].f) < v.length / 3, typ + " Indizes");
+  }
+});
+
+test("Gewindestangen: kein Zuschnitt unter 200 mm ohne Hinweis, immer mit Spannstück", () => {
+  for (const L of [2000, 6000, 12000]) for (const o of [[], [T], [F], [T, F]]) for (let h = 2500; h <= 5000; h += 50) {
+    const r = berechne({ laenge_mm: L, raumhoehe_mm: h, oeffnungen: o });
+    const konflikte = (r.w.validation.zuschnitt_konflikte || []).map((k) => k.grund);
+    assert.ok(!konflikte.includes("kein_reststueck"), `${L}/${h}: Spannstück fehlt`);
+    const kurz = stueckliste(r, fass("sicht"), inn("sicht")).flatMap((g) => g.teile)
+      .filter((t) => /Gewindestange/.test(t.name) && t.art !== "rest" && t.laenge < 200);
+    if (kurz.length) assert.ok(r.hinweise.some((x) => x.includes("unter 20 cm")), `${L}/${h}: kurzes Stück ohne Hinweis`);
+  }
+  // Ab der Mindesthöhe passt die Tür in eine 6-m-Wand.
+  assert.ok(berechne({ laenge_mm: 6000, raumhoehe_mm: 2500, oeffnungen: [T] }).oeffnungen[0]);
+});
+
+test("URL: Voreinstellung, unbekannte Varianten, strenge Öffnungen, Datenblatt-Link mit Rechenstand", () => {
+  const z = zustandAusUrl(new URLSearchParams(""));
+  assert.deepEqual([z.fassade, z.innen, z.ziel], [STANDARD.fassade, STANDARD.innen, STANDARD.ziel]);
+  assert.equal(z.ziel, "beg");
+  const alt = zustandAusUrl(new URLSearchParams("f=gibtsnicht&i=lehm&o=t5,zz,T3,f1e5,f9"));
+  const w = aufbauWahl(A, alt);
+  assert.equal(w.roh.id, STANDARD.fassade);
+  assert.deepEqual(alt.ersetzt, ["fassade"]);
+  assert.deepEqual(alt.oeffnungen, [{ art: "tuer", pos: 5 }, { art: "fenster", pos: 9 }]);
+  // Datenblatt-Link: Rechenstand und Dämmstärken; mit ihnen wird nicht neu ausgelegt.
+  const z2 = zustandAusUrl(new URLSearchParams("f=schindel&i=lehm"));
+  const a2 = aufbauWahl(A, z2);
+  const r2 = berechne({ ...z2, fassade: a2.roh, innen: a2.innen, waerme: a2.waerme });
+  const p = datenblattParameter(z2, r2);
+  assert.equal(p.v, RECHENSTAND);
+  assert.equal(p.dd, r2.fassade.daemmung_mm);
+  const z3 = zustandAusUrl(new URLSearchParams("f=schindel&i=lehm&v=1&dd=120&da=80"));
+  const a3 = aufbauWahl(A, z3);
+  const r3 = berechne({ ...z3, fassade: a3.roh, innen: a3.innen, waerme: a3.waerme });
+  assert.deepEqual([r3.fassade.daemmung_mm, r3.fassade.daemmung_aussen_mm], [120, 80]);
+  // Nicht passende Stärken werden ignoriert.
+  assert.ok(!aufbauWahl(A, zustandAusUrl(new URLSearchParams("f=schindel&dd=7"))).waerme.fest);
+});
+
+test("Exporte: IFC4, DXF und Ausschreibungstext für jede Fassade und Innenseite", () => {
+  for (const f of A.fassaden) for (const i of A.innen) {
+    const z = zustandAusUrl(new URLSearchParams(`f=${f.id}&i=${i.id}&o=t21,f5`)); const a = aufbauWahl(A, z);
+    const r = berechne({ ...z, fassade: a.roh, innen: a.innen, waerme: a.waerme });
+    const ifc = wandAlsIfc(r, r.fassade, a.innen, { link: "https://example.org/?a=1&b=ä" });
+    assert.ok(ifc.startsWith("ISO-10303-21;") && ifc.trimEnd().endsWith("END-ISO-10303-21;"), "IFC-Rahmen");
+    assert.ok(ifc.includes("FILE_SCHEMA(('IFC4'))") && ifc.includes("IFCWALL(") && ifc.includes("IFCMATERIALLAYERSETUSAGE("));
+    assert.equal((ifc.match(/IFCOPENINGELEMENT\(/g) || []).length, r.w.openings.length, "Öffnungen");
+    assert.ok(!/[^\x00-\x7F]/.test(ifc), "IFC nur ASCII");
+    const ids = new Set([...ifc.matchAll(/^#(\d+)=/gm)].map((m) => m[1]));
+    for (const [, ref] of ifc.matchAll(/#(\d+)(?!=)/g)) assert.ok(ids.has(ref), `IFC-Verweis #${ref}`);
+    // Schichtdicken ergeben die Wanddicke aus dem Rechenkern.
+    const dicken = [...ifc.matchAll(/IFCMATERIALLAYER\(#\d+,([\d.]+),/g)].reduce((s2, m) => s2 + +m[1], 0);
+    assert.ok(Math.abs(dicken - r.kennzahlen.dicke_gesamt_mm) < 0.01, `${f.id}/${i.id}: ${dicken} ≠ ${r.kennzahlen.dicke_gesamt_mm}`);
+    const dxf = wandAlsDxf(r, r.fassade, a.innen);
+    assert.ok(dxf.includes("AC1009") && dxf.trimEnd().endsWith("EOF") && !/[^\x00-\x7F]/.test(dxf), "DXF");
+    const steine = r.w.courses.reduce((s2, c) => s2 + c.stones.length, 0);
+    assert.ok((dxf.match(/\r\nPOLYLINE\r\n/g) || []).length >= steine, "ein Rechteck je Stein");
+    const lv = wandAlsLv(r, r.fassade, a.innen);
+    assert.ok(/01\.01 {2}Trockenmauerwerk SEMBLA/.test(lv) && !/NaN|undefined|null/.test(lv), `${f.id}/${i.id}: LV`);
+    assert.ok(!/tragende Wand aus/.test(lv.replace("Nichttragende Wand aus", "")), `${f.id}/${i.id}: LV verspricht keine tragende Wand`);
+    assert.ok(f.schichten?.length ? /Zustimmung im Einzelfall/.test(lv) : /DIN 4103-1/.test(lv), `${f.id}/${i.id}: Verwendbarkeit`);
+  }
+});
+
+test("Holz-UK: Latten bis zum Rand, Traglatte an der Krone, Fassadenachsen ohne Restfeld", () => {
+  const f = fass("schindel");
+  for (const L of [2000, 3875, 6000, 12000]) for (const o of [[], [T], [T, F]]) for (const h of [2500, 2850, 3350]) {
+    const r = berechne({ laenge_mm: L, raumhoehe_mm: h, oeffnungen: o, fassade: f, innen: inn("trockenbau_putz") });
+    const H = r.w.height_mm;
+    const kanten = new Set([0, H, ...r.w.openings.flatMap((op) => [r.w.courses[op.l0].unterkante_mm, r.w.courses[op.l1 - 1].oberkante_mm])]);
+    for (const s of [...r.fa.segmente, ...r.ia.segmente]) assert.ok(kanten.has(s.y0) && kanten.has(s.y1), `${L}/${h}: Latte ${s.x} ${s.y0}–${s.y1}`);
+    // Außen: kein Feld schmaler als 25 cm zwischen Achsen, außer an Öffnungskanten.
+    const ax = r.fa.achsen;
+    if (!o.length) for (let i = 1; i < ax.length; i++) assert.ok(ax[i] - ax[i - 1] >= 375, `${L}: Achsabstand ${ax[i] - ax[i - 1]}`);
+  }
+  const reihen = traglattenReihen(2800, f.schichten.find((s) => s.id === "traglatte"));
+  assert.ok(2800 - (reihen.at(-1) + 50) <= 20 && reihen[0] === 60);
+});
+
+test("Auswahl: nur freigegebene Varianten, Voreinstellung freigegeben", () => {
+  const frei = (l) => l.filter((x) => x.freigegeben !== false).map((x) => x.id);
+  assert.deepEqual(frei(A.fassaden), ["sicht", "schindel", "holzleiste"]);
+  assert.deepEqual(frei(A.innen), ["sicht", "trockenbau_putz"]);
+  const z = zustandAusUrl(new URLSearchParams("f=terrakotta&i=lehm"));
+  const a = aufbauWahl(A, z, { nurFreigegeben: true });
+  assert.deepEqual([a.roh.id, a.innen.id], [STANDARD.fassade, STANDARD.innen]);
+  assert.deepEqual(z.ersetzt, ["fassade", "innen"]);
+  // Ältere Datenblatt-Links mit nicht freigegebenen Varianten bleiben rechenbar.
+  assert.equal(aufbauWahl(A, zustandAusUrl(new URLSearchParams("f=terrakotta&i=lehm"))).roh.id, "terrakotta");
+});
+
+test("Holz-UK: jede Dämmkombination hat eine Schraube; verputzt ohne Dampfbremse, Installationsebene gedämmt", () => {
+  for (const id of ["schindel", "holzleiste"]) {
+    const f = fass(id);
+    for (const d of f.daemmstufen.dicken) for (const da of f.daemmstufen.aussen.dicken)
+      assert.ok(schraubenlaenge(mitDaemmung(f, d, da)).laenge_mm, `${id} ${d}+${da}`);
+    const cfg = { laenge_mm: 6000, raumhoehe_mm: 2850, oeffnungen: [], fassade: f, waerme: { kennwerte: A.waerme, ziel_U: 0.2 } };
+    const putz = berechne({ ...cfg, innen: inn("trockenbau_putz") }), sicht = berechne({ ...cfg, innen: inn("sicht") });
+    const bahn = (r) => r.fassade.schichten.some((s) => s.material === "bahn");
+    assert.equal(bahn(putz), false, id);
+    assert.equal(bahn(sicht), true, id);
+    assert.ok(putz.waerme.feuchte.ok && putz.waerme.erfuellt, id);
+    assert.ok(sicht.waerme.feuchte.ok && sicht.waerme.feuchte.bahn.ok, id);
+    // Stückliste innen: Dämmung der Installationsebene ohne den Lattenanteil
+    const teil = stueckliste(putz, putz.fassade, inn("trockenbau_putz")).find((g) => g.id === "innen").teile.find((t) => t.symbol === "feld");
+    assert.ok(teil && Math.abs(teil.menge - putz.kennzahlen.flaeche_m2 * (1 - 58 / 625)) < 0.01, id);
+  }
+  const standard = berechne({ laenge_mm: 6000, raumhoehe_mm: 2850, oeffnungen: [], fassade: fass("schindel"), innen: inn("trockenbau_putz"), waerme: { kennwerte: A.waerme, ziel_U: 0.2 } });
+  assert.equal(standard.kennzahlen.dicke_gesamt_mm, 437.5);
+});
+
+test("Verbinder: Vorbemessung, Ergänzung nur in freien Nuten, alle halten", () => {
+  const kv = A.verbinder;
+  assert.deepEqual([kv.rd_kN.zug, kv.rd_kN.quer_parallel], [0.6, 0.3]);
+  for (const f of ["schindel", "holzleiste"]) for (const o of [[], [T], [T, F, F]]) for (const [l, h] of [[6000, 2850], [3000, 4500], [12000, 5000]]) {
+    const cfg = { laenge_mm: l, raumhoehe_mm: h, oeffnungen: o, fassade: fass(f), innen: inn("trockenbau_putz"),
+      waerme: { kennwerte: A.waerme, ziel_U: 0.2 }, verbinder: kv };
+    const r = berechne(cfg), ohne = berechne({ ...cfg, verbinder: undefined });
+    const name = `${f} ${l}×${h} ${o.length}`;
+    for (const [k, ver] of [["fa", r.fa], ["ia", r.ia]]) {
+      assert.ok(r.bemessung[k].max <= 1 + 1e-9 && r.bemessung[k].offen === 0, `${name} ${k} ${r.bemessung[k].max}`);
+      // Ergänzte Verbinder: Steinmitte, in einem Stein (nicht in der Fuge), auf einer Latte
+      for (const p of ver.punkte.filter((p) => p.ergaenzt)) {
+        assert.ok(freieHoehen(r.w, p.x).includes(p.y), `${name} ${p.x}/${p.y}`);
+        assert.ok(ver.segmente.some((s) => s.x === p.x && s.y0 < p.y && p.y < s.y1), `${name} Latte ${p.x}/${p.y}`);
+      }
+    }
+    assert.equal(r.kennzahlen.verbinder_fa, r.fa.punkte.length);
+    assert.ok(r.fa.punkte.length >= ohne.fa.punkte.length);
+    assert.ok(r.bemessung.fa.qp_grenze >= kv.last.qp_kN_m2 - 1e-9, name);
+  }
+  // Ohne Fußauflager trägt der Verbinder das Eigengewicht der Schindel nicht (Mock-up: 126 %).
+  const r = berechne({ laenge_mm: 6000, raumhoehe_mm: 2850, oeffnungen: [], fassade: fass("schindel"), innen: inn("sicht"),
+    waerme: { kennwerte: A.waerme, ziel_U: 0.2 } });
+  const ohneFuss = nachweis(r.w, r.fa, r.fa.punkte, r.fassade, "FA", { ...kv, fussauflager: false });
+  assert.ok(Math.max(...ohneFuss.map((x) => x.eta)) > 1);
+  // Stückliste: Fußauflager je Achse, Lüftungsprofil unten und oben
+  const g = stueckliste(r, r.fassade, inn("sicht")).find((x) => x.id === "fassade").teile;
+  assert.equal(g.find((t) => t.name === "Fußauflager").menge, r.fa.achsen.length);
+  assert.equal(g.find((t) => t.symbol === "lueftung").menge, 12);
+});
+
+console.log(`\n${n} Tests bestanden`);

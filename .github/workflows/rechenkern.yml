@@ -1,0 +1,121 @@
+name: Rechenkern abgleichen
+
+# Hält die übernommenen Module der SEMBLA Planungs-Suite aktuell:
+#   js/sembla-core.js   (Steinverband, Vorspannung, Stückliste)
+#   js/sembla-aufbau.js (Modul 2: Verbinder und Latten)
+# Holt täglich (und auf Knopfdruck) die aktuelle Fassung. Bei grünen Tests entsteht ein Pull Request
+# „Rechenkern übernehmen“; live geht der neue Kern erst, wenn jemand ihn zusammenführt. Bei roten
+# Tests entsteht ein Issue. In beiden Fällen bleibt der bisherige Stand live.
+# Die Suite kann den Abgleich sofort anstoßen: repository_dispatch mit type "kern-aktualisiert".
+
+on:
+  schedule:
+    - cron: "17 4 * * *"
+  workflow_dispatch:
+  repository_dispatch:
+    types: [kern-aktualisiert]
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: rechenkern
+
+env:
+  SUITE: p0lycare/SEMBLA-planning-suite
+  DATEIEN: "sembla-core.js sembla-aufbau.js"
+  ISSUE_TITEL: "Neuer Rechenkern der Planungs-Suite bricht die Konfigurator-Tests"
+  ZWEIG: "rechenkern/aktualisierung"
+
+jobs:
+  abgleich:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Aktuelle Module holen
+        id: holen
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          COMMIT=$(gh api "repos/$SUITE/commits/main" --jq '.sha')
+          for f in $DATEIEN; do
+            curl -fsSL "https://raw.githubusercontent.com/$SUITE/$COMMIT/docs/shared/$f" -o "js/$f"
+          done
+          echo "commit=$COMMIT" >> "$GITHUB_OUTPUT"
+          if git diff --quiet -- js/sembla-*.js; then
+            echo "neu=nein" >> "$GITHUB_OUTPUT"; echo "Module unverändert."
+          else
+            echo "neu=ja" >> "$GITHUB_OUTPUT"; git diff --stat -- js/sembla-*.js
+          fi
+
+      - name: Tests mit neuen Modulen
+        id: tests
+        if: steps.holen.outputs.neu == 'ja'
+        continue-on-error: true
+        shell: bash   # mit pipefail: ein roter Testlauf darf nicht durch tee grün werden
+        run: npm test 2>&1 | tee test.log
+
+      - name: Pull Request zur Freigabe
+        if: steps.holen.outputs.neu == 'ja' && steps.tests.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COMMIT: ${{ steps.holen.outputs.commit }}
+        run: |
+          node -e '
+            const fs = require("fs"), crypto = require("crypto");
+            const pfad = "js/rechenkern.version.json";
+            const v = JSON.parse(fs.readFileSync(pfad, "utf8"));
+            for (const f of process.env.DATEIEN.split(" ")) {
+              const datei = "js/" + f;
+              const sha256 = crypto.createHash("sha256").update(fs.readFileSync(datei)).digest("hex");
+              const alt = v.dateien[datei] || {};
+              if (alt.sha256 !== sha256) v.dateien[datei] = { pfad: "docs/shared/" + f, commit: process.env.COMMIT,
+                sha256, uebernommen: new Date().toISOString().slice(0, 10) };
+            }
+            fs.writeFileSync(pfad, JSON.stringify(v, null, 2) + "\n");'
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B "$ZWEIG"
+          git add js/sembla-*.js js/rechenkern.version.json
+          git commit -m "Rechenkern aus der Planungs-Suite übernehmen (${COMMIT:0:7})"
+          git push -f origin "$ZWEIG"
+          {
+            echo "Die Planungs-Suite hat übernommene Module geändert ([${COMMIT:0:7}](https://github.com/$SUITE/commit/$COMMIT))."
+            echo "Die Tests des Konfigurators sind mit dieser Fassung grün."
+            echo; echo "Zusammenführen schaltet den neuen Kern live (GitHub Pages veröffentlicht automatisch)."
+            echo; echo '```'; git diff --stat HEAD~1 -- js/; echo; tail -n 25 test.log; echo '```'
+          } > body.md
+          NR=$(gh pr list --head "$ZWEIG" --state open --json number --jq '.[0].number // empty')
+          if [ -n "$NR" ]; then gh pr edit "$NR" --title "Rechenkern übernehmen (${COMMIT:0:7})" --body-file body.md
+          elif ! gh pr create --base main --head "$ZWEIG" --title "Rechenkern übernehmen (${COMMIT:0:7})" --body-file body.md; then
+            # Dürfen Actions keine Pull Requests anlegen (Repo-Einstellung), kommt ein Issue mit Link zum Anlegen.
+            TITEL="Neuer Rechenkern der Planungs-Suite zur Freigabe bereit"
+            { cat body.md; echo; echo "Pull Request anlegen: https://github.com/$GITHUB_REPOSITORY/compare/main...$ZWEIG?expand=1"; } > issue.md
+            INR=$(gh issue list --state open --search "$TITEL in:title" --json number --jq '.[0].number // empty')
+            if [ -n "$INR" ]; then gh issue comment "$INR" --body-file issue.md; else gh issue create --title "$TITEL" --body-file issue.md; fi
+          fi
+          for n in $(gh issue list --state open --search "$ISSUE_TITEL in:title" --json number --jq '.[].number'); do
+            gh issue close "$n" --comment "Erledigt: Stand ${COMMIT:0:7} besteht die Tests; Pull Request zur Freigabe ist offen."
+          done
+
+      - name: Issue bei roten Tests
+        if: steps.holen.outputs.neu == 'ja' && steps.tests.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COMMIT: ${{ steps.holen.outputs.commit }}
+        run: |
+          {
+            echo "Die Planungs-Suite hat übernommene Module geändert ([${COMMIT:0:7}](https://github.com/$SUITE/commit/$COMMIT))."
+            echo "Mit dieser Fassung schlagen die Tests des Konfigurators fehl. Der bisherige Stand bleibt live."
+            echo; echo '```'; git diff --stat -- js/sembla-*.js; echo; tail -n 60 test.log; echo '```'
+          } > body.md
+          NR=$(gh issue list --state open --search "$ISSUE_TITEL in:title" --json number --jq '.[0].number // empty')
+          if [ -n "$NR" ]; then gh issue comment "$NR" --body-file body.md
+          else gh issue create --title "$ISSUE_TITEL" --body-file body.md; fi
+          exit 1

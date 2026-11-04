@@ -1,0 +1,11 @@
+{
+  "name": "sembla-konfigurator",
+  "version": "0.1.0",
+  "description": "SEMBLA®-Konfigurator für Architekt:innen und Planer:innen – statische Web-App ohne Build-Schritt.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node tests/test-konfigurator.mjs",
+    "start": "python3 -m http.server 8000"
+  }
+}

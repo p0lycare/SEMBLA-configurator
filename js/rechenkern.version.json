@@ -1,0 +1,17 @@
+{
+  "quelle": "https://github.com/p0lycare/SEMBLA-planning-suite",
+  "dateien": {
+    "js/sembla-core.js": {
+      "pfad": "docs/shared/sembla-core.js",
+      "commit": "50e6fce1b0436c6635b2c2a1d42ceaf2d6b17a1e",
+      "sha256": "d985bf5bd4397e5e1549ff46b4267a16380fdebdc4990eebc7c0328aced11b5c",
+      "uebernommen": "2026-11-02"
+    },
+    "js/sembla-aufbau.js": {
+      "pfad": "docs/shared/sembla-aufbau.js",
+      "commit": "50e6fce1b0436c6635b2c2a1d42ceaf2d6b17a1e",
+      "sha256": "548034747abf827a5421f907cd4d34f4582d761c6ea1dfbe24e6617958ea8331",
+      "uebernommen": "2026-11-02"
+    }
+  }
+}

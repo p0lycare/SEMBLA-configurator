@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SEMBLA® Datenblatt</title>
+<meta name="robots" content="noindex">
+<link rel="stylesheet" href="css/app.css">
+<link rel="stylesheet" href="css/datenblatt.css">
+</head>
+<body>
+<div class="app blatt">
+  <header class="blatt-kopf">
+    <img class="logo" src="assets/sembla-logo.svg" alt="SEMBLA®" width="160" height="31">
+    <div class="aktionen">
+      <a class="link" id="zurueck" href="./">Im Konfigurator bearbeiten</a>
+      <button type="button" class="knopf" id="drucken">Als PDF speichern</button>
+    </div>
+  </header>
+
+  <section class="seite">
+    <p class="kicker">Datenblatt · <span id="datum"></span></p>
+    <h1 id="titel">Ihre SEMBLA-Wand</h1>
+    <p class="lead" id="untertitel"></p>
+    <div class="zeichnung" id="zeichnung"></div>
+    <div class="legende mono klein">
+      <span><i class="sw" style="background:#B4B4AE"></i>i3 · 37,5 cm</span>
+      <span><i class="sw" style="background:#CFCFCA"></i>i2 · 25 cm</span>
+      <span><i class="sw linie"></i>Spannachse</span>
+      <span><i class="sw punkt"></i>Verbinder Fassade</span>
+    </div>
+    <div class="kacheln" id="kacheln"></div>
+    <ul class="hinweisliste" id="hinweise"></ul>
+  </section>
+
+  <section class="seite regeln">
+    <h2>So funktioniert Ihre Wand</h2>
+    <ul id="regeln"></ul>
+  </section>
+
+  <section class="seite waerme">
+    <h2>Wärmeschutz</h2>
+    <div id="waerme"></div>
+  </section>
+
+  <section class="seite downloads">
+    <h2>Für Ihre Planung</h2>
+    <p>Diese Wand als Datei für Ihr CAD- oder BIM-Programm und als Entwurf für die Ausschreibung.</p>
+    <div class="download-knoepfe">
+      <button type="button" class="knopf zweit" data-export="ifc">BIM-Modell (IFC4)</button>
+      <button type="button" class="knopf zweit" data-export="dxf">CAD-Zeichnung (DXF)</button>
+      <button type="button" class="knopf zweit" data-export="lv">Ausschreibungstext (TXT)</button>
+    </div>
+    <p class="klein">IFC: Wand mit Schichtaufbau, Öffnungen und U-Wert, für Revit, Archicad, Vectorworks und andere. DXF: Ansicht mit Steinverband und Spannachsen, Grundriss-Schnitt mit Schichtaufbau, in mm. Ausschreibungstext: Positionen mit Mengen, fabrikatsneutral außer SEMBLA, als Entwurf zum Anpassen.</p>
+  </section>
+
+  <section class="seite">
+    <h2>Stückliste</h2>
+    <div id="stueckliste"></div>
+    <p class="klein">Draufsichten nicht maßstäblich. Mengen mit „ca.“ sind überschlägig und ohne Verschnitt.</p>
+  </section>
+
+  <footer class="klein">
+    Vorplanung zur Orientierung. Ersetzt keine Ausführungsplanung und keine Statik. Steinverband, Spannachsen und Verbinderraster nach dem Rechenkern der SEMBLA Planungs-Suite.
+    Polycare Research Technology GmbH · <a href="https://www.sembla.de/produkt">sembla.de</a>
+  </footer>
+</div>
+<script type="module" src="js/datenblatt.js"></script>
+</body>
+</html>

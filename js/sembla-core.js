@@ -1,0 +1,2162 @@
+// @ts-check
+/**
+ * SEMBLA Core - Vanilla-JS-Portierung der Referenz-Implementierung (sembla_core.py).
+ * Erzeugt aus Laenge/Hoehe/Oeffnungen ein Wandelement (Single Source of Truth).
+ * Bit-genau identisch zum Python-Core (gepruefte Paritaet gegen die goldenen Fixtures).
+ *
+ * Einheiten: mm. 'grid' = Rastereinheit (125mm), 'lage' = Lagenindex (200mm).
+ * Die LAGE einer Kante kommt seit #136 aus den kanonischen Feldern der Steinlage
+ * (`unterkante_mm`/`oberkante_mm`/`hoehe_mm`) und nicht mehr aus Lagenindex x Lagenhoehe.
+ */
+
+export const GRID = 125;
+export const COURSE = 200;
+export const THICK = 125;
+export const ROD = 1100;
+export const BLECH = 1000;              // Standard-Modullänge des Kopfblechs (Modulzählung)
+// Bodenblech-Zerlegung ([A-10]/[A-11]/[A-12]): das Bodenblech ist KEINE durchgehende Platte,
+// sondern eine Folge realer Bleche aus dem Vorratssatz der Standardlängen.
+export const BLECH_MIN_MM = 250;        // kleinste Bodenblech-Standardlänge (2 Raster)
+export const BLECH_MAX_MM = 1250;       // groesste Bodenblech-Standardlänge (10 Raster)
+export const BLECH_SPIEL = 2;           // Bauteilmass = Rastermass - 2 mm ([A-12])
+/** Volle Standardreihe 250…1250 mm im 125-mm-Raster (deterministischer Fallback, [A-10]). */
+export const BLECH_LAENGEN = [1250, 1125, 1000, 875, 750, 625, 500, 375, 250];
+export const CHAMBER_OFFSET = 62.5;     // Kammerzentrum -> Lattice x = 62.5 + 125k
+export const MAX_SPAN_GRID = 3;         // Vorspannung max. alle 3 Raster (375mm)
+export const FORBIDDEN_N = new Set([1, 4]);
+export const MIN_FERTIGMASS_MM = 200;   // kleinstes einbaubares Fertigmass eines Zuschnitts ([Z-5])
+export const ROD_OVERHANG = 10;         // Ueberstand des Reststuecks ueber die Wandoberkante ([Z-6])
+// Ausgleichspunkte unter dem Bodenblech ([A-20]…[A-23]): der Bodenanschluss wird mit Laser
+// nivelliert, unter die Bodenbleche kommen kleine Ausgleichsbleche. Beide Parameter stehen
+// GENAU HIER — der Achsversatz ist ausdruecklich variabel gehalten ([A-23]).
+export const AUSGLEICH_DICHTE_JE_M = 3;   // Zielpunktzahl je Meter Wandlaenge ([A-20])
+export const AUSGLEICH_ACHSVERSATZ = 20;  // Abstand einer Auffuellung zur Spannachse ([A-23])
+export const DECKENANSCHLUSS_MAX_MM = 1125;  // groesster Abstand benachbarter Deckenanschluesse ([A-26])
+export const DECKENANSCHLUSS_RANDFELD = 3;   // spaetestens in diesem Feld vom Wandende, nie in Feld 1 ([A-26])
+
+export class SemblaError extends Error {}
+export class InvalidDimensionError extends SemblaError {}
+export class InvalidOpeningError extends SemblaError {}
+export class InvalidInterlockError extends SemblaError {}
+
+/**
+ * @typedef {{g0:number,g1:number,l0:number,l1:number,art:string}} OpeningLike
+ */
+
+/** Validiertes Oeffnungs-Objekt. */
+export class Opening {
+  /** @param {number} g0 @param {number} g1 @param {number} l0 @param {number} l1 @param {string} [art] */
+  constructor(g0, g1, l0, l1, art = "tuer") {
+    if (g1 <= g0) throw new InvalidOpeningError(`g1<=g0 (${g0},${g1})`);
+    if (l1 <= l0) throw new InvalidOpeningError(`l1<=l0 (${l0},${l1})`);
+    if (g0 < 0 || l0 < 0) throw new InvalidOpeningError("negative Koordinate");
+    if (art !== "tuer" && art !== "fenster" && art !== "durchbruch") throw new InvalidOpeningError("unbekannte art " + art);
+    this.g0 = g0; this.g1 = g1; this.l0 = l0; this.l1 = l1; this.art = art;
+  }
+  asDict() { return { g0: this.g0, g1: this.g1, l0: this.l0, l1: this.l1, art: this.art }; }
+}
+
+/** Python-kompatibles Runden (round-half-to-even) — wichtig fuer Paritaet. */
+function pyRound(x) {
+  const f = Math.floor(x), d = x - f;
+  if (d < 0.5) return f;
+  if (d > 0.5) return f + 1;
+  return (f % 2 === 0) ? f : f + 1;
+}
+
+// ---------- Zuschnitt aus ausgewaehlten Standardlaengen ([Z-2]/[Z-5]) ----------
+// Die ausgewaehlten Katalogprodukte sind ein VORRATSSATZ an Standardlaengen, die tatsaechlich
+// KOMBINIERT werden: groesste geeignete Groesse zuerst, mit kleineren ausgewaehlten Groessen
+// auffuellen, das verbleibende Fertigmass als sichtbar gekennzeichneter Sonderzuschnitt aus dem
+// kleinsten geeigneten Ausgangsprodukt. Keine Saegefuge, keine Reststueck-Wiederverwendung,
+// keine Einkaufs-/Verschnittoptimierung.
+//
+// [Z-5] (Mindest-Fertigmass) steht als Baubarkeitsregel UEBER der Groessenpraeferenz: eine
+// Standardgroesse wird nur gewaehlt, wenn der danach verbleibende Rest 0, mindestens das
+// Mindest-Fertigmass oder mit einer weiteren ausgewaehlten Groesse auffuellbar ist. Laesst der
+// Vorratssatz keine solche Wahl zu (z. B. nur EINE Standardlaenge), wird die Groessenpraeferenz
+// beibehalten und der Konflikt SICHTBAR gemeldet (`konflikt: "mindestmass"`) — es entsteht nie
+// still ein nicht einbaubares Kurzstueck und nie eine erfundene Laenge ([P-6]/[P-9]).
+
+/** Rundungsschutz fuer mm-Arithmetik (Katalogmasse sind ganzzahlige mm). */
+function _mm(x) { return Math.round(x * 1e6) / 1e6; }
+
+/** Standardlaengen normalisieren: nur > 0, dedupliziert, ABSTEIGEND. @param {number[]} l */
+export function normLaengen(l) {
+  const arr = (Array.isArray(l) ? l : []).map(Number).filter((x) => Number.isFinite(x) && x > 0);
+  return [...new Set(arr)].sort((a, b) => b - a);
+}
+
+/**
+ * Kleinstes Ausgangsprodukt, aus dem ein Fertigmass geschnitten werden kann
+ * (kleinste ausgewaehlte Standardlaenge >= Mass). Keine passende -> null.
+ * @param {number} massMm @param {number[]} laengenMm
+ */
+export function quelleFuerMass(massMm, laengenMm) {
+  let out = null;
+  for (const l of normLaengen(laengenMm)) if (l >= massMm - 1e-9) out = l;   // absteigend -> letzter Treffer = kleinster
+  return out;
+}
+
+// ---------- Gesperrte Stosshoehen ([Z-7]) ----------
+// Auf der Hoehe eines wirksamen Zwischenspannpunkts sitzt das Einlegeblech in seiner
+// Vertiefung ([A-14]); dort darf keine Kopplungsmutter liegen. Gesperrt ist die EXAKTE
+// lagengenaue Hoehe — es gibt keine vertikale Sperrzone, weil es dafuer kein bestaetigtes
+// Mass gibt und ein geratenes Band den Zuschnitt still verschoebe.
+
+/** Sperrhoehen auf die fuer diese Strecke wirksamen eingrenzen (sortiert, dedupliziert). */
+function normSperren(sperrenMm, bedarfMm, letztesEndeStoss) {
+  const b = _mm(bedarfMm);
+  const arr = (Array.isArray(sperrenMm) ? sperrenMm : []).map(Number)
+    .filter((x) => Number.isFinite(x) && x > 1e-9
+      && (x < b - 1e-9 || (letztesEndeStoss && Math.abs(x - b) < 1e-9)))
+    .map(_mm);
+  return [...new Set(arr)].sort((a, b2) => a - b2);
+}
+
+/** true, wenn `hMm` eine gesperrte Hoehe ist (uebliche mm-Epsilon-Gleichheit, keine Zone). */
+function _gesperrt(hMm, SP) { return SP.some((z) => Math.abs(z - hMm) < 1e-9); }
+
+/** true, wenn die Stueckfolge einen STOSS auf einer gesperrten Hoehe hat. */
+function _stossTrifft(stuecke, SP, bedarfMm, letztesEndeStoss) {
+  if (!SP.length || !stuecke || !stuecke.length) return false;
+  let z = 0;
+  for (let i = 0; i < stuecke.length; i++) {
+    z = _mm(z + stuecke[i].len_mm);
+    const istStoss = (i < stuecke.length - 1) || letztesEndeStoss;
+    if (istStoss && _gesperrt(z, SP)) return true;
+  }
+  return false;
+}
+
+/**
+ * Stossfreie Kombination in der Vorzugsordnung aus [Z-2] ([Z-5] bleibt zwingend).
+ *
+ * Gesucht wird mit Tiefensuche in genau der Reihenfolge, in der die ungesperrte Kombination
+ * waehlt (groesste zulaessige Groesse zuerst): die zuerst gefundene stossfreie Folge ist damit
+ * die nach [Z-2] bevorzugte unter allen stossfreien. Gemerkt wird je Restlaenge — die
+ * kumulierte Hoehe ist aus ihr eindeutig bestimmt (`bedarf − rest`), das Ergebnis also
+ * unabhaengig vom Suchweg. Nicht nach [Z-5] einbaubare Folgen zaehlen NICHT als stossfrei:
+ * sie waeren ein Konflikt hoeheren Rangs und werden dem regulaeren Weg ueberlassen.
+ * @returns {Array<{len_mm:number,art:"standard"|"sonder",quelle_mm:number}>|null}
+ */
+function _kombiniereStossfrei(bedarfMm, laengenMm, SP, minMm, letztesEndeStoss) {
+  const L = normLaengen(laengenMm);
+  if (!L.length) return null;
+  const b = _mm(bedarfMm);
+  /** @type {Map<number, any[]|null>} */
+  const memo = new Map();
+  const rec = (rest) => {
+    if (rest <= 1e-9) return [];
+    if (memo.has(rest)) return memo.get(rest);
+    memo.set(rest, null);                       // Zyklusschutz (kann nicht auftreten, kostet nichts)
+    const pos = _mm(b - rest);
+    let out = null;
+    const passend = L.filter((l) => l <= rest + 1e-9);
+    if (!passend.length) {
+      // Sonderzuschnitt fuer den Restbetrag — sein oberes Ende ist das Ende der Strecke.
+      const q = quelleFuerMass(rest, L);
+      if (q != null && rest >= minMm - 1e-9
+        && !(letztesEndeStoss && _gesperrt(_mm(pos + rest), SP))) {
+        out = [{ len_mm: rest, art: "sonder", quelle_mm: q }];
+      }
+    } else {
+      for (const l of passend) {                // absteigend: groesste zuerst ([Z-2])
+        const r2 = _mm(rest - l);
+        // [Z-5] unveraendert zwingend: Rest danach 0, >= Mindestmass oder weiter auffuellbar.
+        if (!(r2 <= 1e-9 || r2 >= minMm - 1e-9 || L.some((x) => x <= r2 + 1e-9))) continue;
+        const ende = _mm(pos + l);
+        const istStoss = r2 > 1e-9 || letztesEndeStoss;
+        if (istStoss && _gesperrt(ende, SP)) continue;
+        const t = rec(r2);
+        if (t) { out = [{ len_mm: l, art: "standard", quelle_mm: l }, ...t]; break; }
+      }
+    }
+    memo.set(rest, out);
+    return out;
+  };
+  return rec(_mm(b));
+}
+
+/**
+ * Bedarf deterministisch aus den ausgewaehlten Standardlaengen kombinieren ([Z-2]).
+ *
+ * `sperrenMm` sind Hoehen UEBER DEM FUSS der Strecke, auf denen KEIN Stoss liegen darf
+ * ([Z-7], Zwischenspannpunkte nach [A-14]/[A-15]). Ohne Sperren laeuft bit-genau der
+ * bisherige Weg — die Sperrpruefung ist ein eigener, nachgeschalteter Pfad und veraendert
+ * das Ergebnis der ungesperrten Kombination an keiner Stelle.
+ *
+ * @param {number} bedarfMm benoetigte Gesamtlaenge (Geometrie, wird NIE veraendert)
+ * @param {number[]} laengenMm ausgewaehlte Standardlaengen
+ * @param {number} [minMm] Mindest-Fertigmass ([Z-5])
+ * @param {number[]|null} [sperrenMm] Hoehen ueber dem Fuss, auf denen kein Stoss liegen darf
+ * @param {boolean} [letztesEndeStoss] true, wenn auch das obere Ende der Strecke ein Stoss ist
+ *        (Kopplung zum Reststueck [Z-6]); false, wenn dort das Bauteilende liegt
+ * @returns {{stuecke:Array<{len_mm:number,art:"standard"|"sonder",quelle_mm:number}>,
+ *            konflikt:string|null}}
+ */
+export function kombiniereLaengen(bedarfMm, laengenMm, minMm = MIN_FERTIGMASS_MM,
+                                  sperrenMm = null, letztesEndeStoss = false) {
+  const SP = normSperren(sperrenMm, bedarfMm, letztesEndeStoss);
+  if (SP.length) {
+    // [Z-7] Erst wird eine stossfreie Kombination gesucht — in DERSELBEN Vorzugsordnung wie
+    // unten ([Z-2] groesste zuerst) und nur unter den nach [Z-5] zulaessigen Wahlen. Gibt es
+    // keine, bleibt die Geometrie und die regulaere Kombination unveraendert und der Konflikt
+    // wird BENANNT (nie still verletzt, nie ein erfundenes Mass, [P-6]/[P-9]).
+    const frei = _kombiniereStossfrei(bedarfMm, laengenMm, SP, minMm, letztesEndeStoss);
+    if (frei) return { stuecke: frei, konflikt: null };
+    const k = kombiniereLaengen(bedarfMm, laengenMm, minMm);
+    // Ein bereits gemeldeter Zuschnittkonflikt ([Z-5]/Vorratssatz) bleibt die genannte Ursache:
+    // ein Segment fuehrt genau EINEN Grund, und die hoeher stehende Regel wird nicht verdeckt.
+    if (!_stossTrifft(k.stuecke, SP, bedarfMm, letztesEndeStoss)) return k;
+    return { stuecke: k.stuecke, konflikt: k.konflikt || "stoss_auf_zwischenpunkt" };
+  }
+  const L = normLaengen(laengenMm);
+  const stuecke = [];
+  if (!L.length) return { stuecke, konflikt: "keine_standardlaenge" };
+  let rest = _mm(bedarfMm), konflikt = null, guard = 0;
+  while (rest > 1e-9 && guard++ < 10000) {
+    const passend = L.filter((l) => l <= rest + 1e-9);            // absteigend
+    if (!passend.length) break;                                   // Rest < kleinste Standardgroesse
+    // [Z-5] vor Groessenpraeferenz: Rest danach 0, >= Mindestmass oder weiter auffuellbar
+    let pick = passend.find((l) => {
+      const r2 = _mm(rest - l);
+      return r2 <= 1e-9 || r2 >= minMm - 1e-9 || L.some((x) => x <= r2 + 1e-9);
+    });
+    if (pick == null) { pick = passend[0]; konflikt = "mindestmass"; }   // sichtbar, nie still
+    stuecke.push({ len_mm: pick, art: "standard", quelle_mm: pick });
+    rest = _mm(rest - pick);
+  }
+  if (rest > 1e-9) {
+    const q = quelleFuerMass(rest, L);
+    if (q == null) return { stuecke: [], konflikt: "kein_ausgangsprodukt" };
+    if (rest < minMm - 1e-9) konflikt = "mindestmass";
+    stuecke.push({ len_mm: rest, art: "sonder", quelle_mm: q });
+  }
+  return { stuecke, konflikt };
+}
+
+// ---------- Feste Stangenfolge unter dem Spannstueck ([Z-9]) ----------
+// Fachvorgabe (Miro R01 / Felix Bauroth, 28.10.2026): je Strang von unten die GROESSTE gewaehlte
+// Standardlaenge (Standardkatalog: 1050 mm) so oft wie noetig — unten, in der Mitte —, darueber
+// genau EIN variables Stueck (Standardlaenge, wenn es exakt eine ist, sonst ein Sonderzuschnitt
+// passend zur Wandhoehe), ganz oben das Spannstueck ([Z-6], Standardkatalog: 100 mm). Die Zahl
+// der grossen Stuecke ist die groesste, bei der noch ein Rest > 0 fuer das variable Stueck
+// bleibt; das variable Stueck ist damit nie laenger als die groesste Standardlaenge.
+//
+// [Z-5] und [Z-7] stehen als Baubarkeitsregeln UEBER [Z-9]: verletzt die feste Folge eine
+// davon, gilt unveraendert [Z-2] als Rueckfall, und der Grund wird SICHTBAR benannt — nie wird
+// die feste Folge still verbogen und nie ein Mass erfunden ([P-9]).
+
+/**
+ * Feste Stangenfolge fuer die Strecke UNTER dem Spannstueck ([Z-9]).
+ * @param {number} untenMm zu bestueckende Strecke unter dem Spannstueck
+ * @param {number[]} laengenMm ausgewaehlte Standardlaengen
+ * @param {number} [minMm] Mindest-Fertigmass ([Z-5])
+ * @param {number[]|null} [sperrenMm] Hoehen ueber dem Stangenfuss ohne Stoss ([Z-7])
+ * @returns {{stuecke:Array<{len_mm:number,art:"standard"|"sonder",quelle_mm:number}>|null,
+ *            grund:string|null}} `stuecke` null = Schema nicht anwendbar; `grund` benennt
+ *          warum (null nur, wenn gar keine Standardlaenge gewaehlt ist)
+ */
+export function kombiniereStangenschema(untenMm, laengenMm, minMm = MIN_FERTIGMASS_MM,
+                                        sperrenMm = null) {
+  const L = normLaengen(laengenMm);
+  if (!L.length) return { stuecke: null, grund: null };
+  const G = L[0], u = _mm(untenMm);
+  let n = 0;
+  while (_mm(u - (n + 1) * G) > 1e-9) n++;
+  const r = _mm(u - n * G);
+  const stuecke = [];
+  for (let i = 0; i < n; i++) stuecke.push({ len_mm: G, art: "standard", quelle_mm: G });
+  if (L.some((l) => Math.abs(l - r) < 1e-9)) stuecke.push({ len_mm: r, art: "standard", quelle_mm: r });
+  else {
+    if (r < minMm - 1e-9) return { stuecke: null, grund: "mindestmass" };
+    stuecke.push({ len_mm: r, art: "sonder", quelle_mm: quelleFuerMass(r, L) });
+  }
+  // Jedes Stueckende ist ein Stoss — auch das oberste: dort sitzt die Kopplung zum Spannstueck.
+  const SP = normSperren(sperrenMm, u, true);
+  if (_stossTrifft(stuecke, SP, u, true)) return { stuecke: null, grund: "stoss_auf_zwischenpunkt" };
+  return { stuecke, grund: null };
+}
+
+// ---------- Reststueck am oberen Wandabschluss ([Z-6]) ----------
+// Die Waende werden im Innenraum montiert: unter der Decke ist kein Platz mehr, um eine lange
+// Gewindestange einzufaedeln. Das OBERSTE Stueck eines Stranges, der an der Wandoberkante endet,
+// ist deshalb IMMER ein kurzes, im Katalog eigens als Reststueck gewaehltes Produkt.
+//
+// Geometrie: das Reststueck ragt um `ueberstandMm` ueber die Wandoberkante hinaus (Platz fuer
+// Kopfblech/Spannplatte + Spannmutter), sein unteres Ende liegt darunter. Zu bestuecken ist
+// also `h + ueberstand`, nicht `h`. Fuer Segmente, die NICHT an der Wandoberkante enden
+// (Bruestung/Sturz an einer Oeffnung), gilt die Regel nicht — dort ist der Einbau nicht beengt.
+//
+// Hierarchie unterhalb des Reststuecks unveraendert ([Z-2]): von unten immer die groesste noch
+// passende Standardlaenge, dann kleinere, und erst wenn keine mehr passt genau EIN
+// Sonderzuschnitt — der damit direkt unter dem Reststueck sitzt.
+
+/**
+ * Stueckliste eines Strangsegments ([Z-2] + [Z-6]).
+ * @param {number} hMm Segmenthoehe (Geometrie, wird NIE veraendert)
+ * @param {number[]} laengenMm ausgewaehlte Standardlaengen
+ * @param {boolean} obenAnOk true, wenn das Segment an der Wandoberkante endet
+ * @param {number} restMm Laenge des gewaehlten Reststueck-Produkts (0/null = keins gewaehlt)
+ * @param {number} ueberstandMm Ueberstand des Reststuecks ueber die Wandoberkante
+ * @param {number[]|null} [sperrenMm] Hoehen ueber dem STANGENFUSS ohne Stoss ([Z-7])
+ * @param {number} [minMm] Mindest-Fertigmass ([Z-5])
+ * @param {number} [fussOffsetMm] Fussoffset (#92): um so viel beginnt die Stange HOEHER als
+ *        der Segmentfuss (halbe Kopplungsmutterhoehe)
+ * @param {number} [kopfZuschlagMm] Spannplattendicke ueber der Steinoberkante (#92)
+ * @returns {{stuecke:Array<{len_mm:number,art:"standard"|"sonder"|"rest",quelle_mm:number}>,
+ *            konflikt:string|null, bedarf_mm:number,
+ *            schema?:"fest"|"rueckfall", schema_grund?:string}} `schema` nur an Segmenten mit
+ *          Oberkantenbezug und gewaehltem Reststueck ([Z-9])
+ */
+export function kombiniereSegment(hMm, laengenMm, obenAnOk, restMm, ueberstandMm,
+                                  sperrenMm = null, minMm = MIN_FERTIGMASS_MM,
+                                  fussOffsetMm = 0, kopfZuschlagMm = 0) {
+  const R = (+restMm > 0) ? _mm(+restMm) : 0;
+  const UE = (+ueberstandMm > 0) ? _mm(+ueberstandMm) : 0;
+  // #92 Der Fuss ist der REALE Stangenbeginn, nicht die Steinunterkante: die Sechskantschraube
+  // kommt von unten durch das Bodenblech und steckt zur Haelfte in der Kopplungsmutter, die
+  // erste Gewindestange von oben in dieselbe Mutter. Sie beginnt damit eine HALBE Mutterhoehe
+  // ueber Oberkante Bodenblech — und die ist die Steinunterkante, also z = 0; die Blechdicke
+  // geht deshalb NICHT ein. Der Offset verkuerzt die zu bestueckende Strecke und gilt
+  // unabhaengig vom oberen Abschluss. Ohne Katalogmass ist er 0 und alles bleibt bit-genau.
+  const FO = (+fussOffsetMm > 0) ? _mm(+fussOffsetMm) : 0;
+  // Ohne Oberkantenbezug oder ohne gewaehltes Reststueck bleibt alles wie bisher ([Z-2]).
+  if (!obenAnOk || !R) {
+    // Das obere Ende der Strecke ist hier das Segmentende (Anker), also kein Stoss.
+    const k = kombiniereLaengen(_mm(hMm - FO), laengenMm, minMm, sperrenMm, false);
+    // Fehlendes Reststueck an der Oberkante ist ein SICHTBARER Konflikt, keine stille Ausnahme.
+    // Rangfolge: [Z-6] steht UEBER der Stosssperre [Z-7]. Ein Segment fuehrt genau einen Grund,
+    // und der fehlende obere Abschluss darf nicht von der niedriger stehenden Sperre verdeckt
+    // werden; jeder andere bestehende Grund behaelt seinen Vorrang unveraendert.
+    if (obenAnOk && !R) {
+      const g = (k.konflikt && k.konflikt !== "stoss_auf_zwischenpunkt") ? k.konflikt : "kein_reststueck";
+      return { ...k, konflikt: g, bedarf_mm: _mm(hMm - FO) };
+    }
+    return { ...k, bedarf_mm: _mm(hMm - FO) };
+  }
+  // #92 Der Ueberstand beginnt an der OBERKANTE SPANNPLATTE, nicht an der Steinoberkante:
+  // zu bestuecken ist zusaetzlich die Plattendicke. Sie haengt am SELBEN Gate wie der
+  // Ueberstand — es gibt genau eine Bedarfsdefinition. Ohne Spannplatte (Kopfblech) ist der
+  // Zuschlag 0; ein Kopfblechmass wird dafuer NIE ersatzweise herangezogen.
+  const KZ = (+kopfZuschlagMm > 0) ? _mm(+kopfZuschlagMm) : 0;
+  const bedarf = _mm(hMm - FO + KZ + UE);
+  const unten = _mm(bedarf - R);
+  if (unten < -1e-9) return { stuecke: [], konflikt: "reststueck_zu_lang", bedarf_mm: bedarf };
+  const restStueck = { len_mm: R, art: "rest", quelle_mm: R };
+  if (unten <= 1e-9) return { stuecke: [restStueck], konflikt: null, bedarf_mm: bedarf };
+  // [Z-9] Zuerst die feste Stangenfolge (groesste Standardlaenge, so oft wie noetig, darueber
+  // ein variables Stueck). Nur wenn sie [Z-5]/[Z-7] verletzt, gilt [Z-2] als Rueckfall — mit
+  // benanntem Grund (`schema: "rueckfall"`), nie still.
+  const s = kombiniereStangenschema(unten, laengenMm, minMm, sperrenMm);
+  if (s.stuecke) return { stuecke: [...s.stuecke, restStueck], konflikt: null, bedarf_mm: bedarf, schema: "fest" };
+  const schema = s.grund ? { schema: "rueckfall", schema_grund: s.grund } : {};
+  // Unterhalb des Reststuecks ist AUCH das obere Ende ein Stoss: die Kopplung zum Reststueck
+  // ([Z-6]). Sie unterliegt der Sperre nach [Z-7] wie jede andere Kopplung.
+  const k = kombiniereLaengen(unten, laengenMm, minMm, sperrenMm, true);
+  if (!k.stuecke.length) return { stuecke: [], konflikt: k.konflikt || "kein_ausgangsprodukt", bedarf_mm: bedarf, ...schema };
+  return { stuecke: [...k.stuecke, restStueck], konflikt: k.konflikt, bedarf_mm: bedarf, ...schema };
+}
+
+// ---------- Zwischenspannpunkte ([A-14]/[A-15]/[A-17], #93) ----------
+// Ein Zwischenspannpunkt ist ein EINLEGEBLECH in einer Vertiefung der Steinlage, das die
+// Gewindestange waehrend der Montage temporaer fixiert und zentriert; angezogen wird es mit
+// GENAU EINER Mutter von oben ([A-16]). Fachlich ist das etwas anderes als die Spannplatte am
+// Segmentende einer Oeffnung ([A-3]) — die bleibt unveraendert.
+//
+// Die Punkte sind LAGENGENAU: sie liegen auf einer Steinlagen-Oberkante ECHT INNERHALB des
+// Segments. Die Segmentenden selbst sind Anker und keine Zwischenpunkte; ein Segment ohne
+// innere Lagen-Oberkante (genau eine Lage) erzeugt deshalb KEINEN Punkt — es wird keiner
+// erfunden.
+//
+// Abgeleitet wird bei JEDER Rechnung frisch. Das Ergebnis der Ableitung wird NICHT gespeichert
+// und NICHT als manueller Wert ausgegeben: gespeichert ist ausschliesslich ein ausdruecklich
+// gesetzter Override in `prestress.zwischenpunkte_mm` ([A-17]).
+
+// ---------- Kanonisches Lagenkantenmodell (#136) ----------
+// Jede Steinlage traegt ihre Geometrie SELBST: Unterkante, Oberkante und Hoehe in mm. Wo frueher
+// „Lagenindex x 200 mm" gerechnet wurde, wird jetzt die Kante GELESEN. `course_mm` bleibt dabei
+// unveraendert die regulaere Lagenhoehe — es wird weder umgedeutet noch abgeschafft; die
+// Kantenliste entsteht aus ihm. Der Gewinn ist, dass es nur noch EINE Stelle gibt, an der eine
+// Lagenhoehe entsteht — und genau deshalb kann die Hoehenzerlegung darunter (#136,
+// Ausgleichslage) eine einzelne abweichende Lage anhaengen, ohne dass irgendein Leser es merkt.
+
+/**
+ * Kanonische Lagenkanten einer Wand (aufsteigend, luecken- und ueberlappungsfrei).
+ * @param {number} lagenAnzahl Anzahl der Steinlagen
+ * @param {number} [courseMm] regulaere Lagenhoehe
+ * @returns {Array<{lage:number,unterkante_mm:number,oberkante_mm:number,hoehe_mm:number}>}
+ */
+export function lagenKanten(lagenAnzahl, courseMm = COURSE) {
+  const out = [];
+  let z = 0;
+  for (let li = 0; li < lagenAnzahl; li++) {
+    out.push({ lage: li, unterkante_mm: z, oberkante_mm: z + courseMm, hoehe_mm: courseMm });
+    z += courseMm;
+  }
+  return out;
+}
+
+// ---------- Freie Wandhoehe mit EINER oberen Ausgleichslage (#136) ----------
+// Die Zielhoehe H einer Wand ist nicht laenger an das 200-mm-Lagenraster gebunden. Zerlegt wird
+// sie GENAU EINMAL und GENAU HIER:
+//
+//     n    = floor(H / COURSE)      reguläre Lagen zu COURSE
+//     rest = H − n × COURSE         Resthoehe, NIE gerundet
+//
+// Ist `rest > 0` und die Ausgleichslage an dieser Wand aktiviert, entsteht GENAU EINE zusaetzliche
+// oberste Lage mit der Hoehe `rest` — an der GLOBALEN oberen Wandkante, nie tiefer und nie
+// mehrfach. Es wird KEINE regulaere Lage entfernt und es werden NIE zwei niedrigere Lagen
+// kombiniert: einen Optimierer ueber Steinhoehen gibt es ausdruecklich nicht.
+//
+// Ist die Ausgleichslage NICHT aktiviert (Regelfall, insbesondere jeder Altbestand ohne das
+// Feld), bleibt die bisherige Bedingung unveraendert in Kraft: eine nicht durch COURSE teilbare
+// Hoehe ist ein BENANNTER Konflikt (`grund` = AUSGLEICH_KONFLIKT) und wird abgewiesen. H wird in
+// keinem Pfad gerundet und es wird nie still eine Lage erzeugt ([P-6]/[P-9]).
+
+/** Benannter Grund der abgewiesenen Hoehe (deaktivierte Ausgleichslage). */
+export const AUSGLEICH_KONFLIKT = "hoehe_nicht_im_lagenraster";
+
+/**
+ * Hoehenzerlegung einer Wand — die EINE Stelle, an der aus einer Zielhoehe Lagen werden.
+ * @param {number} heightMm Ziel-Wandhoehe in mm (wird NIE gerundet)
+ * @param {boolean} [ausgleichAktiv] Ausgleichslage an dieser Wand aktiviert?
+ * @param {number} [courseMm] regulaere Lagenhoehe
+ * @returns {{kanten:Array<{lage:number,unterkante_mm:number,oberkante_mm:number,hoehe_mm:number,
+ *            ausgleich?:boolean}>, lagen:number, regulaer:number, rest_mm:number,
+ *            regulaer_hoehe_mm:number}}
+ */
+export function hoehenZerlegung(heightMm, ausgleichAktiv = false, courseMm = COURSE) {
+  const ganz = Number.isInteger(heightMm);
+  const n = ganz ? Math.floor(heightMm / courseMm) : 0;
+  const rest = ganz ? heightMm - n * courseMm : 0;
+  if (!ganz || (rest > 0 && !ausgleichAktiv)) {
+    // Wortlaut unveraendert (Altverhalten), zusaetzlich BENANNT ueber `grund`.
+    const e = new InvalidDimensionError(`Wandhoehe ${heightMm} ist kein Vielfaches von ${courseMm} mm`);
+    // @ts-ignore — benannter Grund neben der Meldung
+    e.grund = AUSGLEICH_KONFLIKT;
+    throw e;
+  }
+  if (heightMm < courseMm)
+    throw new InvalidDimensionError(`Wandhoehe ${heightMm} < ${courseMm} mm`);
+  const kanten = lagenKanten(n, courseMm);
+  // GENAU EINE Ausgleichslage, immer oben. `ausgleich` steht nur an ihr — eine regulaere Lage
+  // bekommt kein Feld, das sie vorher nicht hatte.
+  if (rest > 0) kanten.push({ lage: n, unterkante_mm: n * courseMm, oberkante_mm: heightMm,
+    hoehe_mm: rest, ausgleich: true });
+  return { kanten, lagen: kanten.length, regulaer: n, rest_mm: rest,
+    regulaer_hoehe_mm: n * courseMm };
+}
+
+// ---------- Ausgleichssteine: Kataloghoehen und Sonderzuschnitt (#136, [G-16]…[G-18]) ----------
+// Der Core kennt KEINE Produkte, keine Preise und keine Kennungen — er bekommt allein die MASSE,
+// die der zugeordnete Katalog fuer die Ausgleichslage fuehrt (je Steintyp die realen Steinhoehen
+// der gewaehlten Produkte), gereicht ueber denselben kanonischen Neuberechnungspfad wie jedes
+// andere Katalogmass. Daraus entsteht genau EINE Aussage je Stein der Ausgleichslage: fuehrt der
+// Katalog seine Hoehe EXAKT ([G-16]), ist es ein Katalogstein; sonst ist es ein SONDERZUSCHNITT
+// ([G-17]) — ohne Toleranz, ohne Rundung, ohne Mindesthoehe und ohne harte Sperre. Die Geometrie
+// aendert sich dadurch NICHT: es bleibt bei genau einer Ausgleichslage mit der Resthoehe.
+
+/**
+ * Kataloghoehen der Ausgleichssteine je Steintyp — normalisiert (positiv, eindeutig, sortiert).
+ * Fehlt die Angabe (kein Katalog, keine Auswahl), bleibt sie LEER: dann passt keine Hoehe, und
+ * jeder Stein der Ausgleichslage ist ein Sonderzuschnitt. Geraten wird nichts ([P-9]).
+ * @param {{i2?:number[],i3?:number[]}|null} [v]
+ * @returns {{i2:number[],i3:number[]}}
+ */
+export function normAusgleichHoehen(v) {
+  const eine = (a) => [...new Set((Array.isArray(a) ? a : [])
+    .map(Number).filter((n) => Number.isFinite(n) && n > 0))].sort((a, b) => a - b);
+  const o = (v && typeof v === "object") ? v : {};
+  return { i2: eine(o.i2), i3: eine(o.i3) };
+}
+
+/**
+ * [G-18] Sichtbarer Pruefhinweis zu einem Sonderzuschnitt der Ausgleichslage — mit dem
+ * TATSAECHLICHEN Mass. Es gibt bewusst KEINE numerische Warnschwelle: der Hinweis steht an
+ * JEDEM Sonderzuschnitt, gleich ob 3 mm oder 170 mm, und behauptet keine Grenze, die niemand
+ * genannt hat ([P-9]). Der Wortlaut liegt hier, damit Wandelement und Stueckliste denselben
+ * Satz fuehren.
+ * @param {string} typ Steintyp ("i2"/"i3") @param {number} hoeheMm reales Fertigmass
+ */
+export function ausgleichPruefhinweis(typ, hoeheMm) {
+  return `Ausgleichsstein ${typ} Sonderzuschnitt ${hoeheMm} mm – geringe Höhe/konstruktive `
+    + `Ausführung prüfen`;
+}
+
+/**
+ * Kanonische Lagenkanten eines FERTIGEN Wandelements.
+ *
+ * Gelesen werden die Felder der Lagen selbst. Der Rueckfall auf `course_mm` gilt allein
+ * gespeicherten Altstaenden, die die Felder noch nicht fuehren — er rechnet nichts anderes,
+ * sondern baut dieselbe Kantenliste aus der regulaeren Lagenhoehe.
+ * @param {any} w Wandelement
+ * @returns {Array<{lage:number,unterkante_mm:number,oberkante_mm:number,hoehe_mm:number}>}
+ */
+export function wandLagenKanten(w) {
+  const cs = (w && Array.isArray(w.courses)) ? w.courses : null;
+  if (cs && cs.length && cs.every((c) => c && Number.isFinite(c.oberkante_mm)
+    && Number.isFinite(c.unterkante_mm) && Number.isFinite(c.hoehe_mm)))
+    return cs.map((c) => ({ lage: c.lage, unterkante_mm: c.unterkante_mm,
+      oberkante_mm: c.oberkante_mm, hoehe_mm: c.hoehe_mm }));
+  const C = (w && w.course_mm > 0) ? w.course_mm : COURSE;
+  const L = (w && Number.isFinite(w.lagen)) ? w.lagen
+    : (w && Number.isFinite(w.height_mm) ? Math.floor(w.height_mm / C) : 0);
+  return lagenKanten(Math.max(0, L), C);
+}
+
+/**
+ * Steinlagen-Oberkanten ECHT INNERHALB eines Segments (aufsteigend).
+ *
+ * `kanten` ist entweder die kanonische Kantenliste (bevorzugt — dann werden die Oberkanten
+ * GELESEN) oder, fuer Altaufrufer, eine regulaere Lagenhoehe in mm.
+ * @param {number} z0Mm Segmentfuss @param {number} z1Mm Segmentkopf
+ * @param {Array<{oberkante_mm:number}>|number} [kanten]
+ * @returns {number[]}
+ */
+export function lagenOberkantenInnen(z0Mm, z1Mm, kanten = COURSE) {
+  if (Array.isArray(kanten))
+    return kanten.map((c) => c.oberkante_mm)
+      .filter((z) => z > z0Mm + 1e-9 && z < z1Mm - 1e-9)
+      .sort((a, b) => a - b);
+  const out = [];
+  const courseMm = kanten;
+  if (!(courseMm > 0)) return out;
+  const erste = Math.floor(z0Mm / courseMm) + 1;
+  for (let r = erste; r * courseMm < z1Mm - 1e-9; r++) {
+    const z = r * courseMm;
+    if (z > z0Mm + 1e-9) out.push(z);
+  }
+  return out;
+}
+
+/**
+ * Automatischer Zwischenspannpunkt eines Segments ([A-15]).
+ *
+ * Genommen wird die innere Lagen-Oberkante mit dem KLEINSTEN ABSTAND zur halben Segmenthoehe;
+ * bei Gleichstand deterministisch die NIEDRIGERE (die Kandidaten laufen aufsteigend, und nur ein
+ * strikt kleinerer Abstand gewinnt). Ohne innere Lagen-Oberkante gibt es keinen Punkt -> null.
+ * @param {number} z0Mm @param {number} z1Mm
+ * @param {Array<{oberkante_mm:number}>|number} [kanten]
+ * @returns {number|null}
+ */
+export function autoZwischenpunkt(z0Mm, z1Mm, kanten = COURSE) {
+  const kand = lagenOberkantenInnen(z0Mm, z1Mm, kanten);
+  if (!kand.length) return null;
+  const mitte = (z0Mm + z1Mm) / 2;
+  let best = kand[0], bestD = Math.abs(kand[0] - mitte);
+  for (const z of kand.slice(1)) {
+    const d = Math.abs(z - mitte);
+    if (d < bestD - 1e-9) { best = z; bestD = d; }
+  }
+  return best;
+}
+
+/**
+ * Manuelle Zwischenspannpunkte normalisieren und validieren ([A-17]).
+ *
+ * Zulaessig sind ganzzahlige Vielfache der Lagenhoehe ECHT INNERHALB der Wand. Ein unzulaessiger
+ * Wert wird NICHT auf eine andere Lage gerundet — er wird benannt (`fehler`) und nicht angewandt
+ * ([P-9]); gerundet entstuende still ein anderer Punkt als der gesetzte.
+ *
+ * `punkte === null` heisst „kein Override" (Auto-Ableitung). Eine AUSDRUECKLICH leere Liste ist
+ * dagegen die Aussage „diese Wand hat keine Zwischenspannpunkte" und faellt nicht auf Auto zurueck.
+ *
+ * #136 Hier steht bewusst weiter die Lagenhoehe und nicht die Kantenliste: geprueft wird eine
+ * EINGABE gegen das Lagenraster — auch ausserhalb der Wand, wo es keine Lage und damit keine
+ * Kante gibt. Die Rangfolge der Gruende (Raster vor Wandgrenze) bleibt dadurch unveraendert.
+ * @param {number[]|null|undefined} arr @param {number} heightMm Wandhoehe @param {number} [courseMm]
+ * @returns {{punkte:number[]|null,fehler:Array<{grund:string,wert:any}>}}
+ */
+export function normZwischenpunkte(arr, heightMm, courseMm = COURSE) {
+  if (!Array.isArray(arr)) return { punkte: null, fehler: [] };
+  const out = [], fehler = [];
+  for (const raw of arr) {
+    const z = Number(raw);
+    if (!Number.isInteger(z)) { fehler.push({ grund: "nicht_ganzzahlig", wert: raw }); continue; }
+    if (z % courseMm !== 0) { fehler.push({ grund: "nicht_auf_lagen_oberkante", wert: raw }); continue; }
+    if (z <= 0 || z >= heightMm) { fehler.push({ grund: "ausserhalb_wand", wert: raw }); continue; }
+    out.push(z);
+  }
+  return { punkte: [...new Set(out)].sort((a, b) => a - b), fehler };
+}
+
+/**
+ * Wirksame Zwischenspannpunkte EINES Segments (aufsteigend, absolute Hoehen in mm).
+ *
+ * Mit Override gelten genau die gesetzten Punkte, die in diesem Segment eine innere
+ * Lagen-Oberkante sind — nichts wird verschoben und nichts ergaenzt. Ohne Override gilt die
+ * Ableitung nach [A-15].
+ * @param {number} z0Mm @param {number} z1Mm @param {number[]|null} [override]
+ * @param {Array<{oberkante_mm:number}>|number} [kanten]
+ * @returns {number[]}
+ */
+export function zwischenpunkteSegment(z0Mm, z1Mm, override = null, kanten = COURSE) {
+  const innen = lagenOberkantenInnen(z0Mm, z1Mm, kanten);
+  if (Array.isArray(override))
+    return innen.filter((z) => override.some((o) => Math.abs(Number(o) - z) < 1e-9));
+  const a = autoZwischenpunkt(z0Mm, z1Mm, kanten);
+  return a == null ? [] : [a];
+}
+
+/**
+ * Wirksame Zwischenspannpunkte eines fertigen Wandelements — die EINE Ableitung fuer jede
+ * Ausgabe, die sie zeigt. Frisch gerechnet, nie gespeichert.
+ * @param {any} w Wandelement
+ * @returns {Array<{k:number,x_mm:number,z_mm:number,z0_mm:number,z1_mm:number}>}
+ */
+export function wirksameZwischenpunkte(w) {
+  if (!w || !Array.isArray(w.tension_columns)) return [];
+  // #136 Die Lagenoberkanten kommen aus den kanonischen Lagenkanten der Wand, nicht mehr aus
+  // Lagenindex x `course_mm`.
+  const KANTEN = wandLagenKanten(w);
+  const ov = (w.prestress && Array.isArray(w.prestress.zwischenpunkte_mm))
+    ? w.prestress.zwischenpunkte_mm : null;
+  const out = [];
+  for (const col of w.tension_columns) for (const sg of (col.segments || []))
+    for (const z of zwischenpunkteSegment(sg.z0_mm, sg.z1_mm, ov, KANTEN))
+      out.push({ k: col.k, x_mm: col.x_mm, z_mm: z, z0_mm: sg.z0_mm, z1_mm: sg.z1_mm });
+  return out;
+}
+
+// ---------- Bodenblech aus Standardlaengen ([A-10]/[A-11]/[A-12]) ----------
+// Das Bodenblech ist kein wandlanges Einzelteil, sondern eine Folge REALER Bleche. Zerlegt wird
+// deterministisch aus dem VORRATSSATZ der Standardlaengen (Vielfache von 125 mm, 375…1250 mm):
+// moeglichst wenige und moeglichst grosse Teile (die Ordnung dieser beiden Kriterien steht
+// unten) — verwandt mit der Groessenpraeferenz aus [Z-2] beim Gewindestangenzuschnitt.
+//
+// [A-10] Der Sonderzuschnitt ist die AUSNAHME und keine Abkuerzung: existiert IRGENDEINE exakte
+// Kombination aus Standardlaengen, entsteht kein Sonderzuschnitt. Gewaehlt wird deshalb in ZWEI
+// getrennten Stufen — erst wird der Raum der EXAKTEN Kombinationen vollstaendig ausgewertet, und
+// nur wenn er leer ist, kommt der Sonderpfad. (Eine Tiefensuche, die einen Sonderabschluss als
+// Erfolg nimmt, bricht zu frueh ab: sie akzeptiert in einem frueh betretenen grossen Ast einen
+// Rest, obwohl ein anderer Ast exakt aufgeht — z. B. 2500 mm aus {1000, 625, 375}, wo
+// 4 x 625 exakt deckt.)
+//
+// Unter den exakten Kombinationen entscheidet zuerst die GERINGSTE Teilezahl, danach
+// deterministisch die groessten Teile (groesste Standardlaenge zuerst). Beides zusammen ist
+// "moeglichst wenige und moeglichst grosse Teile" aus [A-10]: gerechnet wird als Minimum ueber
+// die Restlaenge (je Position gemerkt), und weil die Laengen absteigend durchlaufen werden und
+// nur eine STRIKT kleinere Teilezahl gewinnt, ist das Ergebnis die lexikographisch groesste
+// unter den kuerzesten Kombinationen.
+//
+// [A-11] ist ein MUSS und steht UEBER dieser Optimierung: kein Blechstoss darf auf einem
+// Steinstoss der untersten Lage liegen. Optimiert wird deshalb zuerst unter den STOSSFREIEN
+// exakten Kombinationen. Gibt es exakte, aber keine stossfreie, wird die nach obiger Ordnung
+// beste EXAKTE genommen und jeder verletzte Stoss BENANNT gemeldet — nie still verletzt und
+// nie zugunsten eines Sonderzuschnitts umgangen.
+//
+// Nur wenn KEINE exakte Kombination die Laenge deckt, greift der Sonderpfad: Groessenpraeferenz
+// von unten, und GENAU EIN Sonderzuschnitt am Ende — fuer den Rest, in den keine Standardlaenge
+// mehr passt. Auch dieser Pfad weicht Stoessen zuerst aus und meldet, was uebrig bleibt.
+//
+// #138 Gerechnet wird das alles je BEREICH: eine Wand kann manuell gewaehlte Rasterfelder ohne
+// Bodenblech fuehren ([A-28]), und jeder verbleibende zusammenhaengende Bereich wird UNABHAENGIG
+// mit genau diesen Regeln zerlegt ([A-29]). Ohne Aussparungen ist der einzige Bereich die ganze
+// Wand — dann ist das Ergebnis bit-genau das bisherige.
+
+/** Vorratssatz auf zulaessige Bodenblech-Standardlaengen eingrenzen. @param {number[]} l */
+export function normBlechLaengen(l) {
+  return normLaengen(l).filter((x) => Number.isInteger(x) && x % GRID === 0
+    && x >= BLECH_MIN_MM && x <= BLECH_MAX_MM);
+}
+
+// ---------- Bodenblech-Aussparungen ([A-28]/[A-29]/[A-30], #138) ----------
+// Ein Aussparungseintrag bezeichnet GENAU EIN vollstaendiges 125-mm-Rasterfeld ohne Bodenblech;
+// er ist eine MANUELLE Planungseingabe und wird nie abgeleitet, nie gewaehlt und nie verschoben.
+// Kanonisch gefuehrt wird er als Rasterindex k im Vorspannblock des Wandelements
+// (`prestress.base_plate_aussparungen_grid`) — derselbe Ort, an dem schon der Vorratssatz der
+// Bodenblechlaengen und die uebrigen Overrides stehen.
+//
+// [A-28] Aus den Eintraegen entstehen DISJUNKTE Intervalle innerhalb der Wand: dedupliziert,
+// aufsteigend, und BENACHBARTE Felder zu genau einem Intervall zusammengefasst. Damit gibt es zu
+// jeder Wand genau eine Lesart von „ausgespart" und „belegt" — ueberdeckungsfrei und unabhaengig
+// von der Eingabereihenfolge.
+// [A-30] Ein unzulaessiger Eintrag (nicht ganzzahlig, ausserhalb der — ggf. nachtraeglich
+// gekuerzten — Wand) wird deterministisch VERWORFEN und dabei BENANNT; er wird nie auf ein
+// anderes Feld geschoben, weil dabei still eine andere Aussparung entstuende ([P-9]).
+
+/**
+ * Manuelle Bodenblech-Aussparungen normalisieren und validieren ([A-28]/[A-30]).
+ *
+ * `arr === null/undefined` heisst „keine Aussparungen" (kein Feld am Wandelement). Eine
+ * ausdrueckliche Liste wird geprueft; jeder abgewiesene Wert steht in `fehler`.
+ * @param {number[]|null|undefined} arr Rasterindizes der ausgesparten Felder
+ * @param {number} N Wandlaenge in Rastern
+ * @returns {{felder:number[]|null, bereiche:Array<{g0:number,g1:number}>,
+ *            fehler:Array<{grund:string,wert:any}>}}
+ */
+export function normBodenblechAussparungen(arr, N) {
+  if (!Array.isArray(arr)) return { felder: null, bereiche: [], fehler: [] };
+  const out = [], fehler = [];
+  for (const raw of arr) {
+    const k = (typeof raw === "boolean") ? NaN : Number(raw);
+    if (!Number.isInteger(k)) { fehler.push({ grund: "nicht_ganzzahlig", wert: raw }); continue; }
+    if (k < 0 || k >= N) { fehler.push({ grund: "ausserhalb_wand", wert: raw }); continue; }
+    out.push(k);
+  }
+  const felder = [...new Set(out)].sort((a, b) => a - b);
+  // [A-28] Benachbarte Felder werden deterministisch zu EINEM Intervall zusammengefasst.
+  const bereiche = [];
+  for (const k of felder) {
+    const letzt = bereiche.length ? bereiche[bereiche.length - 1] : null;
+    if (letzt && letzt.g1 === k) letzt.g1 = k + 1;
+    else bereiche.push({ g0: k, g1: k + 1 });
+  }
+  return { felder, bereiche, fehler };
+}
+
+/**
+ * [A-29] EINEN zusammenhaengenden Bodenblechbereich [x0, x1) zerlegen — mit genau den Regeln
+ * aus [A-10]/[A-11]/[A-12]. Der Bereich wird UNABHAENGIG von jedem anderen gerechnet: seine
+ * Enden sind freie Blechenden und keine Stoesse, und kein Teil reicht ueber sie hinaus.
+ * @param {number} x0Mm @param {number} x1Mm
+ * @param {number[]} L normalisierter Vorratssatz (absteigend)
+ * @param {Set<number>} stoss Rasterpositionen der Steinstoesse der untersten Lage
+ */
+function zerlegeBlechbereich(x0Mm, x1Mm, L, stoss) {
+  // Ein Bereichsende ist kein Stoss — dort endet das Bodenblech ohnehin (am Wandende, an einer
+  // Aussparung oder an beidem).
+  const frei = (x) => x >= x1Mm || !stoss.has(x / GRID);
+
+  // Stufe 1: EXAKTE Kombination — geringste Teilezahl, darunter die groessten Teile.
+  // `strict` = die Stossregel [A-11] wird eingehalten.
+  const exakt = (strict) => {
+    /** @type {Map<number, {anzahl:number,teile:any[]}|null>} */
+    const memo = new Map();
+    const rec = (x) => {
+      if (x === x1Mm) return { anzahl: 0, teile: [] };
+      if (memo.has(x)) return memo.get(x);
+      let best = null;
+      for (const l of L) {                                 // absteigend: groesste zuerst
+        if (x + l > x1Mm) continue;
+        if (strict && !frei(x + l)) continue;              // [A-11]
+        const t = rec(x + l);
+        if (!t) continue;
+        // Nur eine STRIKT kleinere Teilezahl gewinnt -> bei Gleichstand bleibt die zuerst
+        // gefundene, also die mit der groesseren Laenge an dieser Stelle.
+        if (best === null || t.anzahl + 1 < best.anzahl) {
+          best = { anzahl: t.anzahl + 1,
+                   teile: [{ x0_mm: x, raster_mm: l, art: "standard" }, ...t.teile] };
+        }
+      }
+      memo.set(x, best);
+      return best;
+    };
+    const r = rec(x0Mm);
+    return r ? r.teile : null;
+  };
+
+  // Stufe 2: Sonderpfad — nur wenn keine exakte Kombination existiert. Groessenpraeferenz von
+  // unten; GENAU EIN Sonderzuschnitt am Ende fuer den Rest, in den keine Standardlaenge passt.
+  const mitSonder = (strict) => {
+    /** @type {Map<number, any[]|null>} */
+    const memo = new Map();
+    const rec = (x) => {
+      if (x === x1Mm) return [];
+      if (memo.has(x)) return memo.get(x);
+      let out = null;
+      for (const l of L) {                                 // absteigend: groesste zuerst
+        if (x + l > x1Mm) continue;
+        if (strict && !frei(x + l)) continue;              // [A-11]
+        const t = rec(x + l);
+        if (t) { out = [{ x0_mm: x, raster_mm: l, art: "standard" }, ...t]; break; }
+      }
+      if (!out) {
+        const rest = x1Mm - x;
+        // [A-10] Sonderzuschnitt nur, wenn arithmetisch KEINE Standardlaenge mehr passt.
+        if (rest > 0 && !L.some((l) => l <= rest)) out = [{ x0_mm: x, raster_mm: rest, art: "sonder" }];
+      }
+      memo.set(x, out);
+      return out;
+    };
+    return rec(x0Mm);
+  };
+
+  // Reihenfolge der Wahl: stossfrei exakt -> exakt (Stoss gemeldet) -> stossfrei mit
+  // Sonderzuschnitt -> mit Sonderzuschnitt (Stoss gemeldet). Gemeldet wird danach an EINER
+  // Stelle aus der gewaehlten Folge, damit kein Pfad still eine Stossverletzung durchlaesst.
+  const teile = exakt(true) || exakt(false) || mitSonder(true) || mitSonder(false) || [];
+  const konflikte = [];
+  for (const tl of teile) {
+    const e = tl.x0_mm + tl.raster_mm;
+    if (!frei(e)) konflikte.push({ grund: "stoss_auf_steinstoss", x_mm: e, grid: e / GRID });
+  }
+  return { teile, konflikte };
+}
+
+/**
+ * Bodenblech einer Wand deterministisch in reale Teile zerlegen
+ * ([A-10]/[A-11]/[A-12] je Bereich, [A-28]/[A-29] fuer die Aussparungen).
+ *
+ * Ohne Aussparungen ist der einzige Bereich die ganze Wand — das Ergebnis ist dann bit-genau
+ * das bisherige.
+ * @param {number} lengthMm Wandlaenge (Vielfaches von 125 mm)
+ * @param {number[]} laengenMm Vorratssatz der Standardlaengen
+ * @param {number[]} [stossGrid] Rasterpositionen der Steinstoesse der untersten Lage
+ * @param {Array<{g0:number,g1:number}>} [aussparungen] normalisierte, disjunkte Rasterintervalle
+ *        ohne Bodenblech ([A-28]) — innerhalb der Wand, aufsteigend, nicht benachbart
+ * @returns {{teile:Array<{x0_mm:number,raster_mm:number,bauteil_mm:number,art:"standard"|"sonder"}>,
+ *            konflikte:Array<{grund:string,x_mm?:number,grid?:number}>,
+ *            bereiche:Array<{x0_mm:number,x1_mm:number,laenge_mm:number}>,
+ *            luecken:Array<{g0:number,g1:number,x0_mm:number,x1_mm:number,laenge_mm:number}>}}
+ */
+export function zerlegeBodenblech(lengthMm, laengenMm, stossGrid = [], aussparungen = []) {
+  const L = normBlechLaengen(laengenMm);
+  const stoss = new Set((stossGrid || []).map(Number));
+  const konflikte = [];
+  if (!L.length) konflikte.push({ grund: "keine_standardlaenge" });
+  const luecken = (Array.isArray(aussparungen) ? aussparungen : [])
+    .map((a) => ({ g0: a.g0, g1: a.g1, x0_mm: a.g0 * GRID, x1_mm: a.g1 * GRID,
+      laenge_mm: (a.g1 - a.g0) * GRID }));
+  // [A-29] Belegte und ausgesparte Intervalle sind das Komplement voneinander — ueberdeckungsfrei
+  // und zusammen exakt die Wandlaenge.
+  const bereiche = [];
+  let x = 0;
+  for (const lu of luecken) {
+    if (lu.x0_mm > x) bereiche.push({ x0_mm: x, x1_mm: lu.x0_mm, laenge_mm: lu.x0_mm - x });
+    x = lu.x1_mm;
+  }
+  if (lengthMm > x) bereiche.push({ x0_mm: x, x1_mm: lengthMm, laenge_mm: lengthMm - x });
+
+  const teile = [];
+  for (const b of bereiche) {
+    // [A-29] Ein Bereich, der kuerzer ist als die kleinste zulaessige Bodenblech-Standardlaenge,
+    // ist mit den bestehenden Regeln NICHT baubar. Gemeldet wird das BENANNT — die Aussparung
+    // wird dafuer nie still fallengelassen und der Bereich nie mit dem Nachbarn ueberbrueckt.
+    // Ohne Aussparungen kann der Fall nicht auftreten (die Wandlaenge ist >= 250 mm).
+    if (b.laenge_mm < BLECH_MIN_MM)
+      konflikte.push({ grund: "bereich_unbaubar", x_mm: b.x0_mm, x0_mm: b.x0_mm,
+        x1_mm: b.x1_mm, laenge_mm: b.laenge_mm });
+    const r = zerlegeBlechbereich(b.x0_mm, b.x1_mm, L, stoss);
+    for (const tl of r.teile) teile.push(tl);
+    for (const k of r.konflikte) konflikte.push(k);
+  }
+  return {
+    teile: teile.map((tl) => ({ x0_mm: tl.x0_mm, raster_mm: tl.raster_mm,
+      bauteil_mm: tl.raster_mm - BLECH_SPIEL, art: tl.art })),
+    konflikte, bereiche, luecken,
+  };
+}
+
+// ---------- Ausgleichspunkte unter dem Bodenblech ([A-20]…[A-23]) ----------
+// Der Bodenanschluss wird mit Laser nivelliert; unter die Bodenbleche werden kleine
+// Ausgleichsbleche gelegt. WO die liegen, ist hier gerechnet — deterministisch aus Wandlaenge,
+// Bodenblech-Stoessen und Spannachsen, ohne Zufall und ohne Startwert.
+//
+// [A-21] Pflichtpunkte sind beide Wandenden und jede Bodenblech-Stossmitte; sie zaehlen in die
+// Dichte hinein und werden NIE verschoben. [A-20] Zielpunktzahl ist ceil(3 je Meter), wobei
+// mehr Pflichtpunkte ihre eigene Anzahl setzen. [A-22] Der Rest wird nach LAENGENANTEIL auf die
+// Luecken verteilt und darin gleichmaessig gesetzt. [A-23] Eine Auffuellung haelt mindestens den
+// Achsversatz zur naechsten Spannachse; liegt sie naeher, wird sie auf GENAU diesen Abstand
+// gesetzt — ohne Konfliktmeldung und ohne Validierungseintrag, weil es den Konfliktfall nach
+// fachlicher Festlegung nicht gibt (ein Bodenblechstoss liegt per Definition nie in einer
+// Spannachse, siehe [A-21]).
+
+/**
+ * [A-23] Eine Auffuellung mindestens `versatzMm` neben der naechsten Spannachse halten.
+ * @param {number} xMm @param {number[]} achsenXMm @param {number} versatzMm
+ */
+function achsversatz(xMm, achsenXMm, versatzMm) {
+  if (!(versatzMm > 0) || !achsenXMm.length) return xMm;
+  // Naechste Achse; bei genau gleichem Abstand gewinnt die zuerst gelistete (kleinste x).
+  // Ein solcher Gleichstand liegt zwangslaeufig 62,5 mm neben beiden Achsen und damit weit
+  // ausserhalb des Versatzes — er kann das Ergebnis also gar nicht erreichen.
+  let nah = achsenXMm[0];
+  for (const xa of achsenXMm) if (Math.abs(xa - xMm) < Math.abs(nah - xMm)) nah = xa;
+  const d = xMm - nah;
+  if (Math.abs(d) >= versatzMm) return xMm;
+  // Geschoben wird auf die Seite, auf der der Punkt schon liegt. `d === 0` ist arithmetisch
+  // unmoeglich (die Achse liegt auf 62,5 + 125k, der Punkt auf einem ganzen Millimeter); die
+  // Plusseite ist deshalb nur die ausgesprochene Festlegung und kein erreichter Zweig.
+  // Eine Kaskade gibt es nicht: der Achsabstand ist >= 125 mm, ein auf den Versatz gesetzter
+  // Punkt ist von jeder Nachbarachse >= 105 mm entfernt.
+  return nah + (d < 0 ? -versatzMm : versatzMm);
+}
+
+/**
+ * Ausgleichspunkte EINES belegten Bodenblechbereichs verteilen ([A-20]…[A-23] je Bereich,
+ * [A-31]). Reine Funktion; der Bereich ist die Rechenlaenge, nicht die Wandlaenge.
+ * @param {number} x0Mm Bereichsanfang @param {number} x1Mm Bereichsende
+ * @param {number} lengthMm Wandlaenge (nur zur Unterscheidung Wandende/Bereichsende)
+ * @param {number[]} stossXMm INNERE Blechstoesse des Bodenblechs in mm (ganze Wand)
+ * @param {number[]} achsenXMm Spannachsen in mm @param {number} versatzMm Achsversatz
+ * @returns {Array<{x_mm:number,art:string}>}
+ */
+function bereichsAusgleichspunkte(x0Mm, x1Mm, lengthMm, stossXMm, achsenXMm, versatzMm) {
+  const laengeMm = x1Mm - x0Mm;
+  // [A-21]/[A-31] Pflichtpunkte sind ANFANG und ENDE des belegten Bereichs sowie jeder REALE
+  // innere Blechstoss DARIN. Ein Bereichsende, das zugleich ein Wandende ist, heisst weiter
+  // "wandende" — die Kante einer Aussparung ist ein "bereichsende" und kein Stoss ([A-29]).
+  const pflicht = new Map();
+  pflicht.set(x0Mm, x0Mm === 0 ? "wandende" : "bereichsende");
+  pflicht.set(x1Mm, x1Mm === lengthMm ? "wandende" : "bereichsende");
+  for (const x of stossXMm) if (x > x0Mm && x < x1Mm && !pflicht.has(x)) pflicht.set(x, "blechstoss");
+  const stellen = [...pflicht.keys()].sort((a, b) => a - b);
+
+  // [A-20] Zielpunktzahl DIESES Bereichs. `AUSGLEICH_DICHTE_JE_M * laengeMm` ist ganzzahlig und
+  // laengeMm ein Vielfaches von 125, der Quotient also exakt darstellbar — die Aufrundung ist
+  // damit in beiden Cores dieselbe. Mehr Pflichtpunkte als die Dichte verlangt: dann gilt deren
+  // Anzahl. Ohne Aussparungen ist der einzige Bereich die ganze Wand ⇒ bit-genau der Altstand.
+  const ziel = Math.max(stellen.length, Math.ceil(AUSGLEICH_DICHTE_JE_M * laengeMm / 1000));
+
+  // [A-22] Restpunkte nach Laengenanteil auf die Luecken DIESES Bereichs — groesste-Reste-
+  // Verfahren in REINER Ganzzahlarithmetik. Weil die Luecken den Bereich lueckenlos abdecken,
+  // ist die Summe ihrer Laengen exakt die Bereichslaenge; der Quotient ist damit genau der
+  // Laengenanteil. Bei gleichem Rest gewinnt die KLEINERE Lueckennummer — die Gleichstandsregel
+  // ist ausgesprochen, nicht der Reihenfolge einer Datenstruktur ueberlassen.
+  const luecken = [];
+  for (let i = 0; i < stellen.length - 1; i++)
+    luecken.push({ i, a: stellen[i], b: stellen[i + 1], n: 0, r: 0 });
+  const rest = ziel - stellen.length;
+  if (rest > 0 && luecken.length) {
+    let vergeben = 0;
+    for (const lk of luecken) {
+      const z = rest * (lk.b - lk.a);
+      lk.n = Math.floor(z / laengeMm);
+      lk.r = z % laengeMm;
+      vergeben += lk.n;
+    }
+    const reihe = luecken.slice().sort((p, q) => (q.r - p.r) || (p.i - q.i));
+    for (let j = 0; j < rest - vergeben; j++) reihe[j].n++;
+  }
+
+  const out = [];
+  for (let i = 0; i < stellen.length; i++) {
+    out.push({ x_mm: stellen[i], art: pflicht.get(stellen[i]) });
+    const lk = luecken[i];
+    if (!lk || lk.n <= 0) continue;
+    for (let j = 1; j <= lk.n; j++) {
+      // Gleichmaessige Teilung der Luecke — dasselbe Muster wie `balancedFill()`, damit JS und
+      // Python bit-gleich runden (`pyRound` ist Pythons `round`, half-to-even).
+      const x = pyRound(lk.a + (lk.b - lk.a) * j / (lk.n + 1));
+      out.push({ x_mm: achsversatz(x, achsenXMm, versatzMm), art: "auffuellung" });
+    }
+  }
+  return out;
+}
+
+/**
+ * Ausgleichspunkte einer Wand deterministisch verteilen ([A-20]/[A-21]/[A-22]/[A-23]/[A-31]).
+ * Reine Funktion — gleiche Eingabe, gleiche Ausgabe, kein Zustand.
+ *
+ * [A-31] Gerechnet wird JE REAL BELEGTEM Bodenblechbereich ([A-29]) und nie ueber die ganze
+ * Wandlaenge hinweg: in einer Aussparung liegt kein Ausgleichspunkt, und ein durch die
+ * Aussparung ueberholter frueherer Stoss traegt keinen. Ohne Aussparungen ist der einzige
+ * Bereich die ganze Wand — das Ergebnis ist dann bit-genau das bisherige.
+ * @param {number} lengthMm Wandlaenge (Vielfaches von 125 mm)
+ * @param {number[]} [stossXMm] INNERE Blechstoesse des Bodenblechs in mm
+ * @param {number[]} [achsenXMm] Spannachsen in mm (62,5 + 125k), aufsteigend
+ * @param {number} [versatzMm] Abstand einer Auffuellung zur naechsten Spannachse
+ * @param {Array<{x0_mm:number,x1_mm:number}>} [bereiche] belegte Bereiche aus
+ *        `zerlegeBodenblech()`; fehlend/leer = die ganze Wand ist belegt
+ * @returns {Array<{x_mm:number,art:"wandende"|"bereichsende"|"blechstoss"|"auffuellung"}>}
+ */
+export function verteileAusgleichspunkte(lengthMm, stossXMm = [], achsenXMm = [],
+                                         versatzMm = AUSGLEICH_ACHSVERSATZ, bereiche = null) {
+  const B = (Array.isArray(bereiche) && bereiche.length)
+    ? bereiche : [{ x0_mm: 0, x1_mm: lengthMm }];
+  const out = [];
+  for (const b of B)
+    for (const p of bereichsAusgleichspunkte(b.x0_mm, b.x1_mm, lengthMm,
+                                             stossXMm || [], achsenXMm || [], versatzMm))
+      out.push(p);
+  return out;
+}
+
+/**
+ * Manuell gesetzte Ausgleichspunkte normalisieren und validieren ([A-24]).
+ *
+ * Zulaessig ist jede GANZE Millimeterlage INNERHALB der Wand einschliesslich beider Wandenden —
+ * anders als bei [A-17] sind `0` und `lengthMm` also gueltig, denn die Wandenden sind regulaere
+ * Ausgleichspunkte ([A-21]). Ein unzulaessiger Wert wird NICHT auf eine erreichbare Lage
+ * gerundet: er wird benannt (`fehler`) und nicht angewandt ([P-9]) — gerundet entstuende still
+ * ein anderer Punkt als der gesetzte. DOPPELTE Werte sind dagegen kein Befund, sondern werden
+ * deterministisch zusammengefasst (wie bei `columns_grid`/`zwischenpunkte_mm`).
+ *
+ * `punkte === null` heisst „kein Override": es gilt die Verteilung nach [A-20]…[A-23]. Eine
+ * AUSDRUECKLICH leere Liste ist dagegen die Aussage „diese Wand hat keine Ausgleichspunkte" und
+ * faellt nicht auf die Verteilung zurueck.
+ * @param {number[]|null|undefined} arr @param {number} lengthMm Wandlaenge
+ * @returns {{punkte:number[]|null,fehler:Array<{grund:string,wert:any}>}}
+ */
+export function normAusgleichspunkte(arr, lengthMm) {
+  if (!Array.isArray(arr)) return { punkte: null, fehler: [] };
+  const out = [], fehler = [];
+  for (const raw of arr) {
+    const x = Number(raw);
+    if (!Number.isInteger(x)) { fehler.push({ grund: "nicht_ganzzahlig", wert: raw }); continue; }
+    if (x < 0 || x > lengthMm) { fehler.push({ grund: "ausserhalb_wand", wert: raw }); continue; }
+    out.push(x);
+  }
+  return { punkte: [...new Set(out)].sort((a, b) => a - b), fehler };
+}
+
+// ---------- Deckenanschlusspunkte ([A-26]/[A-27], #95/#124) ----------
+// Der Deckenanschluss ist die ZWEITE moegliche Ausfuehrung der oberen Spannachse ([P-24]): an
+// einer Achse steht entweder der Wandabschluss ODER der Deckenanschluss, nie beides. WO er
+// sitzt, ist hier gerechnet — deterministisch aus den Spannachsen, ohne Zufall und ohne
+// Startwert.
+//
+// [A-26] (Fassung vom 2026-10-29, Miro R01 DA 2/DA 3) Die Verteilung ist bewusst SIMPEL und
+// ausdruecklich KEINE Statik. Gezaehlt wird in 125-mm-Rasterfeldern VOM JEWEILIGEN WANDENDE
+// (Feld 1 = aeusserstes Feld; die Achse auf Rasterindex k liegt links in Feld k+1, rechts in
+// Feld N-k). An JEDEM Wandende steht ein Deckenanschluss spaetestens in Feld 3
+// (DECKENANSCHLUSS_RANDFELD) und NIE in Feld 1; gewaehlt wird je Ende die AEUSSERSTE Spannachse
+// in Feld 2 oder 3. Zwischen den beiden Randpunkten liegen zwischen benachbarten Anschluessen
+// hoechstens DECKENANSCHLUSS_MAX_MM (1125 mm = 9 Raster). Kandidat ist JEDE Spannachse
+// ausserhalb von Feld 1 (Festlegung vom 2026-09-08); es wird keine Achse erfunden und keine
+// Zwischenlage gewaehlt. Steht in Feld 2–3 keine Spannachse, wird die NAECHSTE zulaessige Achse
+// genommen und das sichtbar gemeldet (`deckenanschlussRand`); liegen die Spannachsen selbst
+// weiter als 1125 mm auseinander, ebenso (`deckenanschlussLuecken`) — nie eine Achse erfunden
+// ([P-9]). Die Achsverteilung selbst wird hier weder gelesen noch beeinflusst — nur ihr Ergebnis.
+//
+// Gerechnet wird bei JEDER Rechnung frisch. Das Ergebnis der Verteilung wird NICHT gespeichert
+// und NICHT als manueller Wert ausgegeben: gespeichert ist ausschliesslich ein ausdruecklich
+// gesetzter Override in `prestress.deckenanschluss_grid` ([A-27]).
+
+/**
+ * Deckenanschlusspunkte deterministisch auf die Spannachsen verteilen ([A-26]).
+ * Reine Funktion — gleiche Eingabe, gleiche Ausgabe, kein Zustand.
+ *
+ * Achsen in Feld 1 eines Wandendes (k = 0, k = nGrid-1) scheiden aus. An jedem Ende wird eine
+ * Achse in Feld 2–3 gesetzt; fehlt dort eine, die naechste zulaessige Achse (gemeldet von
+ * `deckenanschlussRand`). Stehen dort zwei, entscheidet zuerst die kleinere Gesamtpunktzahl,
+ * dann die AEUSSERE Achse (links vor rechts). Dazwischen wird von links nach rechts
+ * jeweils die ENTFERNTESTE Achse gewaehlt, die von der zuletzt gesetzten aus noch innerhalb von
+ * DECKENANSCHLUSS_MAX_MM liegt — die kleinstmoegliche Punktzahl, vollstaendig deterministisch.
+ * Traegt kein Nachbar die Reichweite, wird die naechste Achse trotzdem gesetzt; die
+ * Ueberschreitung meldet `deckenanschlussLuecken`. Ohne zulaessige Achse (Wand unter drei
+ * Feldern, oder Achsen nur in Feld 1) entsteht KEIN Punkt — gemeldet, nicht erfunden.
+ * @param {number[]} [achsenK] Rasterindizes der Spannachsen (aufsteigend)
+ * @param {number} [nGrid] Rasterbreite der Wand
+ * @returns {number[]} gewaehlte Rasterindizes, aufsteigend
+ */
+export function verteileDeckenanschluss(achsenK = [], nGrid = 0) {
+  const Z = [...new Set(achsenK)].sort((a, b) => a - b).filter((k) => k >= 1 && k <= nGrid - 2);
+  if (!Z.length) return [];
+  const R = DECKENANSCHLUSS_RANDFELD;
+  // Randkandidaten je Ende, das AEUSSERSTE zuerst; ohne Achse in Feld 2–3 die naechste
+  // zulaessige Achse (der Befund dazu entsteht in `deckenanschlussRand`).
+  const links = Z.filter((k) => k + 1 <= R);
+  const rechts = Z.filter((k) => nGrid - k <= R).reverse();
+  if (!links.length) links.push(Z[0]);
+  if (!rechts.length) rechts.push(Z[Z.length - 1]);
+  // Rangfolge: kleinstmoegliche Punktzahl, bei Gleichstand die aeusserste Achse (links vor
+  // rechts). Hoechstens 2 x 2 Paare — keine Suche, keine Iteration ueber die Wand.
+  let best = null;
+  for (const k0 of links) for (const k1 of rechts) {
+    if (k0 > k1) continue;
+    const kette = deckenanschlussKette(Z.filter((k) => k >= k0 && k <= k1));
+    if (!best || kette.length < best.length) best = kette;
+  }
+  return best;
+}
+
+/** Greedy-Kette zwischen erster und letzter Achse der Liste: jeweils die ENTFERNTESTE Achse
+ *  innerhalb von DECKENANSCHLUSS_MAX_MM; ohne erreichbare Achse die naechste (Luecke). */
+function deckenanschlussKette(A) {
+  const maxK = DECKENANSCHLUSS_MAX_MM / GRID;   // 1125 mm = exakt 9 Rasterfelder
+  const out = [A[0]];
+  let i = 0;
+  while (i < A.length - 1) {
+    let j = i;
+    while (j + 1 < A.length && A[j + 1] - A[i] <= maxK) j++;
+    if (j === i) j = i + 1;   // Achsluecke > 1125 mm: naechste Achse, Meldung kommt getrennt
+    out.push(A[j]);
+    i = j;
+  }
+  return out;
+}
+
+/**
+ * Randfeld-Befunde einer Deckenanschluss-Punktliste benennen ([A-26]/[A-27], DA 2/DA 3).
+ * Reine Funktion fuer BEIDE Pfade (Verteilung und Override): je Wandende wird gemeldet, wenn
+ * ein Punkt in Feld 1 liegt (`feld_1`) oder kein Punkt in Feld 2–3 steht (`fehlt_feld_2_3`,
+ * dazu der dem Ende naechste Punkt ausserhalb von Feld 1 oder `null`). Die Punktliste wird
+ * dadurch NICHT veraendert — nichts wird verschoben.
+ * @param {number[]} [punkteK] Rasterindizes der Deckenanschlusspunkte
+ * @param {number} [nGrid] Rasterbreite der Wand
+ * @returns {Array<{ende:"links"|"rechts",grund:string,k:number|null,feld:number|null}>}
+ */
+export function deckenanschlussRand(punkteK = [], nGrid = 0) {
+  const P = [...new Set(punkteK)].sort((a, b) => a - b);
+  const R = DECKENANSCHLUSS_RANDFELD;
+  const befunde = [];
+  for (const ende of ["links", "rechts"]) {
+    const feld = (k) => (ende === "links" ? k + 1 : nGrid - k);
+    for (const k of P) if (feld(k) === 1) befunde.push({ ende, grund: "feld_1", k, feld: 1 });
+    if (!P.some((k) => feld(k) >= 2 && feld(k) <= R)) {
+      const rest = P.filter((k) => feld(k) >= 2);
+      const k = rest.length ? (ende === "links" ? rest[0] : rest[rest.length - 1]) : null;
+      befunde.push({ ende, grund: "fehlt_feld_2_3", k, feld: k === null ? null : feld(k) });
+    }
+  }
+  return befunde;
+}
+
+/**
+ * Abstandsverletzungen einer Deckenanschluss-Punktliste benennen ([A-26]).
+ * Reine Funktion: jedes Paar benachbarter Punkte, dessen Abstand DECKENANSCHLUSS_MAX_MM
+ * ueberschreitet, wird als Luecke gemeldet — die Verteilung wird dadurch nicht veraendert.
+ * @param {number[]} [punkteK] Rasterindizes der Deckenanschlusspunkte (aufsteigend)
+ * @returns {Array<{von_k:number,bis_k:number,abstand_mm:number}>}
+ */
+export function deckenanschlussLuecken(punkteK = []) {
+  const luecken = [];
+  for (let i = 1; i < punkteK.length; i++) {
+    const abstandMm = (punkteK[i] - punkteK[i - 1]) * GRID;
+    if (abstandMm > DECKENANSCHLUSS_MAX_MM)
+      luecken.push({ von_k: punkteK[i - 1], bis_k: punkteK[i], abstand_mm: abstandMm });
+  }
+  return luecken;
+}
+
+/**
+ * Manuell gesetzte Deckenanschlusspunkte normalisieren und validieren ([A-27]).
+ *
+ * Zulaessig ist ausschliesslich der Rasterindex einer WIRKLICH VORHANDENEN Spannachse dieser
+ * Wand — ein Anschlusspunkt liegt immer auf einer Spannachse. Ein unzulaessiger Wert wird NICHT
+ * auf die naechste Achse geschoben: er wird benannt (`fehler`) und nicht angewandt ([P-9]) —
+ * verschoben entstuende still ein anderer Punkt als der gesetzte. DOPPELTE Werte sind dagegen
+ * kein Befund, sondern werden deterministisch zusammengefasst (wie bei `columns_grid`).
+ *
+ * `punkte === null` heisst „kein Override" (Verteilung nach [A-26]). Eine AUSDRUECKLICH leere
+ * Liste ist dagegen die Aussage „diese Wand hat keinen Deckenanschluss" und faellt nicht auf die
+ * Verteilung zurueck.
+ * @param {number[]|null|undefined} arr
+ * @param {number[]} achsenK Rasterindizes der vorhandenen Spannachsen
+ * @param {number} nGrid Rasterbreite der Wand
+ * @returns {{punkte:number[]|null,fehler:Array<{grund:string,wert:any}>}}
+ */
+export function normDeckenanschluss(arr, achsenK = [], nGrid = 0) {
+  if (!Array.isArray(arr)) return { punkte: null, fehler: [] };
+  const achsen = new Set(achsenK);
+  const out = [], fehler = [];
+  for (const raw of arr) {
+    const k = Number(raw);
+    if (!Number.isInteger(k)) { fehler.push({ grund: "nicht_ganzzahlig", wert: raw }); continue; }
+    if (k < 0 || k >= nGrid) { fehler.push({ grund: "ausserhalb_wand", wert: raw }); continue; }
+    if (!achsen.has(k)) { fehler.push({ grund: "keine_spannachse", wert: raw }); continue; }
+    out.push(k);
+  }
+  return { punkte: [...new Set(out)].sort((a, b) => a - b), fehler };
+}
+
+/** @returns {Set<number>} absolute Rasterpositionen der inneren Fugen (ohne Segmentenden). */
+function segJoints(startGrid, tiling) {
+  const js = new Set(); let c = startGrid;
+  for (let i = 0; i < tiling.length - 1; i++) { c += tiling[i]; js.add(c); }
+  return js;
+}
+
+/** i3-maximale Lagen-Varianten fuer Breite n (Raster). i2 immer nur an den Enden. */
+function candidates(n) {
+  if (n < 2) return [[]];
+  const r = n % 3;
+  if (r === 2) { const f = Array((n - 2) / 3).fill(3); return [[2, ...f], [...f, 2]]; }
+  if (r === 1) { const f = Array((n - 4) / 3).fill(3); return [[2, 2, ...f], [...f, 2, 2]]; }
+  const m = n / 3;
+  if (m === 1) return [[3]];
+  const f = Array(m - 2).fill(3);
+  return [Array(m).fill(3), [2, 2, ...f, 2], [2, ...f, 2, 2]];
+}
+
+/** Vergleich (notConflict, i3count, dist): >0 wenn a strikt groesser. */
+function keyCmp(a, b) {
+  if (a[0] !== b[0]) return (a[0] ? 1 : 0) - (b[0] ? 1 : 0);
+  if (a[1] !== b[1]) return a[1] - b[1];
+  return a[2] - b[2];
+}
+
+/** Waehlt unter den i3-maximalen Varianten die, die der Lage darunter ausweicht. */
+function pickTiling(startGrid, n, prev) {
+  let best = null;
+  for (const comp of candidates(n)) {
+    const js = segJoints(startGrid, comp);
+    const conflict = [...js].some(j => prev.has(j));
+    const i3 = comp.filter(b => b === 3).length;
+    let dist = 99;
+    if (js.size && prev.size) dist = Math.min(...[...js].flatMap(j => [...prev].map(f => Math.abs(j - f))));
+    const key = [!conflict, i3, dist];
+    if (best === null || keyCmp(key, best.key) > 0) best = { key, comp };
+  }
+  return best.comp;
+}
+
+function balancedFill(a, b, maxstep) {
+  if (b <= a) return [a];
+  const k = Math.ceil((b - a) / maxstep);
+  const out = [];
+  for (let i = 0; i <= k; i++) out.push(pyRound(a + (b - a) * i / k));
+  return out;
+}
+
+/**
+ * [V-3]/[V-11] Bezugslage der Grundachsen: die KOPFSTEINE der Wand (Fassung 29.10.2026,
+ * Miro R01 SA 2 / Felix Bauroth).
+ *
+ * Kopfstein ist jeder Stein, ueber dessen Rasterzellen KEIN weiterer Stein liegt. Ohne Staffelung
+ * und ohne Oeffnung bis zur Oberkante ist das genau die OBERSTE Lage — mit Ausgleichslage
+ * ([G-13]) also diese, denn sie ist die oberste gebaute Lage unter dem oberen Anschluss. Mit
+ * Staffelung ist es die lokale Oberkante; ein Stein, der an einer Stufe teilweise ueberbaut ist,
+ * ist kein Kopfstein. Gelesen wird der VOLLSTAENDIGE Verband ([G-11], vor dem Aussparen der
+ * Verzahnungsbereiche). Kopfsteine ueberlappen sich nie (ein Stein unter einem anderen waere
+ * ueberbaut). Ergebnis: Rasterintervalle [a,b), aufsteigend nach a.
+ */
+function kopfsteine(courses, occ, L) {
+  const out = [];
+  for (const c of courses) for (const st of c.stones) {
+    const a = st.x0 / GRID, b = st.x1 / GRID;
+    let frei = true;
+    for (let k = a; k < b && frei; k++)
+      for (let r = c.lage + 1; r < L; r++) if (occ[r][k]) { frei = false; break; }
+    if (frei) out.push([a, b]);
+  }
+  out.sort((p, q) => p[0] - q[0]);
+  return out;
+}
+
+/**
+ * [V-11] Stapelwand (Felix Bauroth, 29.10.2026): eine Wand NUR aus i2 (bzw. nur aus i3), deren
+ * Steine direkt und OHNE Versatz uebereinander stehen. Geprueft am VOLLSTAENDIGEN Verband: jede
+ * Rasterzelle wird in allen Lagen von demselben Steinintervall belegt, und alle Steine haben
+ * dieselbe Breite. Liefert 2 (i2-Stapel), 3 (i3-Stapel) oder 0 (kein Stapel).
+ */
+function stapelBreite(steinIv, N) {
+  if (!steinIv.length) return 0;
+  const w = steinIv[0][1] - steinIv[0][0];
+  const zelle = new Array(N).fill(-1);
+  for (const [a, b] of steinIv) {
+    if (b - a !== w) return 0;
+    for (let k = a; k < b; k++) {
+      if (zelle[k] >= 0 && zelle[k] !== a) return 0;
+      zelle[k] = a;
+    }
+  }
+  return (w === 2 || w === 3) ? w : 0;
+}
+
+/**
+ * [V-3]/[V-11] Grundachsen der Auto-Verteilung aus den KOPFSTEINEN (s. `kopfsteine`).
+ *
+ *   [V-3]  i3 `[a,a+3)`  -> `a+1` (Mitte = Feld 2 des Steins), an JEDER Stelle der Lage. Das gilt
+ *          auch fuer den i3-Stapel: genau EINE Achse mittig (SA 3b; KKI 5 „nach aktuellem Stand
+ *          nicht" zwei).
+ *   [V-11] i2-Stapel -> BEIDE Kammern `a` und `a+1` (SA 3a, Issue #122).
+ *   [V-11] sonst i2 als ERSTER Stein  -> `a+1`  (2. Rasterachse, nicht das aeussere Randfeld).
+ *   [V-11] sonst i2 als LETZTER Stein -> `a`    (2. Rasterachse von rechts, s. o.).
+ *   [V-11] i2 im Inneren -> KEINE Grundachse. Ein i2 hat keine Rastermitte (zwei Zellen);
+ *          es wird keine erfunden — die Abdeckung uebernimmt danach [V-2].
+ *
+ * Ist ein einzelner i2 zugleich erster UND letzter Kopfstein, ohne dass die Wand ein i2-Stapel
+ * ist, gilt die Anfangsregel: genau EINE Grundachse auf der 2. Rasterachse.
+ */
+function grundachsen(steine, N, stapel = 0) {
+  const klemm = (k) => Math.max(0, Math.min(N - 1, k));
+  const out = new Set();
+  for (let i = 0; i < steine.length; i++) {
+    const [a, b] = steine[i];
+    if (b - a === 3) { out.add(klemm(a + 1)); continue; }
+    if (b - a !== 2) continue;
+    if (stapel === 2) { out.add(klemm(a)); out.add(klemm(a + 1)); continue; }
+    if (i === 0) out.add(klemm(a + 1));
+    else if (i === steine.length - 1) out.add(klemm(a));
+  }
+  return out;
+}
+
+// #136 Die Hoehe wird hier nicht mehr selbst geprueft, sondern ZERLEGT (`hoehenZerlegung`) — die
+// Pruefung ist Teil der Zerlegung und wirft denselben Fehler wie zuvor. Die REIHENFOLGE der
+// Gruende bleibt unveraendert (Laenge vor Hoehe vor Oeffnungen), und die Oeffnungen werden gegen
+// die WIRKLICHE Lagenzahl gehalten — mit Ausgleichslage ist das eine Lage mehr.
+function validateInputs(lengthMm, heightMm, openings, ausgleichAktiv = false) {
+  if (!Number.isInteger(lengthMm) || lengthMm % GRID !== 0)
+    throw new InvalidDimensionError(`Wandlaenge ${lengthMm} ist kein Vielfaches von ${GRID} mm`);
+  if (lengthMm < 2 * GRID)
+    throw new InvalidDimensionError(`Wandlaenge ${lengthMm} < Mindestmass ${2 * GRID} mm`);
+  const Z = hoehenZerlegung(heightMm, ausgleichAktiv, COURSE);
+  const N = lengthMm / GRID, L = Z.lagen;
+  for (const op of openings) {
+    if (op.g1 > N) throw new InvalidOpeningError(`Oeffnung ueber Wandlaenge (g1=${op.g1} > N=${N})`);
+    if (op.l1 > L) throw new InvalidOpeningError(`Oeffnung ueber Wandhoehe (l1=${op.l1} > L=${L})`);
+  }
+  for (let i = 0; i < openings.length; i++)
+    for (let j = i + 1; j < openings.length; j++) {
+      const a = openings[i], b = openings[j];
+      if (a.g0 < b.g1 && b.g0 < a.g1 && a.l0 < b.l1 && b.l0 < a.l1)
+        throw new InvalidOpeningError(`Oeffnungen ueberlappen: #${i} und #${j}`);
+    }
+  return Z;
+}
+
+/**
+ * Baut ein Wandelement.
+ * @param {string} name
+ * @param {number} lengthMm Vielfaches von 125, >=250
+ * @param {number} heightMm Vielfaches von 200, >=200
+ * @param {Opening[]} [openings]
+ * @returns {object} Wandelement (siehe wandelement.schema.json)
+ */
+export const SEITEN_FUNKTIONEN = ["fassade", "innenausbau", "sicht", "installation"];
+export const DEFAULT_SIDES = { vorne: { funktion: "fassade" }, hinten: { funktion: "innenausbau" } };
+function normSides(s) {
+  const f = (v, d) => (v && SEITEN_FUNKTIONEN.includes(v.funktion)) ? v.funktion : d;
+  return { vorne: { funktion: f(s && s.vorne, "fassade") }, hinten: { funktion: f(s && s.hinten, "innenausbau") } };
+}
+
+export const DEFAULT_PRESTRESS = { max_span_grid: MAX_SPAN_GRID, force_kN: null, start_axis_grid: 0 };
+function normPrestress(p) {
+  const m = (p && Number.isInteger(p.max_span_grid) && p.max_span_grid >= 1) ? p.max_span_grid : MAX_SPAN_GRID;
+  const fk = (p && p.force_kN != null) ? p.force_kN : null;
+  // Gewindestangen-Standardlaengen ([Z-1]): der VORRATSSATZ der gewaehlten Katalogprodukte ist
+  // die verbindliche Quelle.
+  //
+  // FEHLT das Feld ganz (Altstand/Altaufruf), gilt unveraendert der kompatible Fallback aus dem
+  // Einzelwert `rod_mm` bzw. ROD — dann ist der Satz einelementig und die Kombination liefert
+  // bit-genau das bisherige Ergebnis.
+  //
+  // Ist das Feld dagegen AUSDRUECKLICH gesetzt und leer, hat der Aufrufer die Auswahl bereits
+  // ausgewertet und sagt: es ist keine Standardlaenge gewaehlt. Dann wird KEINE erfunden — weder
+  // als `rod_mm` noch als reales Stueck. Der Zuschnitt bleibt sichtbar offen
+  // (`zuschnitt_konflikte`: `keine_standardlaenge`), statt still 1100 mm zu behaupten.
+  const rodExplizit = Array.isArray(p && p.rod_lengths_mm);
+  let rodL = normLaengen(p && p.rod_lengths_mm);
+  let rod;
+  if (rodL.length) rod = rodL[0];
+  else if (rodExplizit) rod = null;
+  else { rod = (p && p.rod_mm != null && +p.rod_mm > 0) ? +p.rod_mm : ROD; rodL = [rod]; }
+  const blech = (p && p.blech_mm != null && +p.blech_mm > 0) ? +p.blech_mm : BLECH;
+  // Bodenblech-Standardlaengen ([A-10]): der VORRATSSATZ ist Core-Parameter. Fehlt das Feld,
+  // gilt der deterministische Fallback mit der vollen Standardreihe 250…1250 mm — es wird
+  // also nie eine Laenge geraten und nie aus `blech_mm` abgeleitet (das bleibt allein die
+  // Modullaenge des Kopfblechs). Ist das Feld AUSDRUECKLICH gesetzt und leer, hat der Aufrufer
+  // die Auswahl bereits ausgewertet: dann wird keine Standardlaenge erfunden, die Zerlegung
+  // meldet `keine_standardlaenge` und weist das Bodenblech als Sonderzuschnitt aus.
+  const blechExplizit = Array.isArray(p && p.blech_lengths_mm);
+  const blechL = blechExplizit ? normBlechLaengen(p.blech_lengths_mm) : BLECH_LAENGEN.slice();
+  // Oberer Anschluss ([A-2], #92): DEFAULT ist die SPANNPLATTE. Fehlt das Feld oder traegt es
+  // einen unbekannten Wert, gilt der beschlossene Standard — Kopfblech bleibt waehlbar, muss
+  // dafuer aber AUSGESPROCHEN werden. Ein gespeichertes "blech" wird hier nie umgeschrieben.
+  const top = (p && (p.top_connection === "spannplatte" || p.top_connection === "blech")) ? p.top_connection : "spannplatte";
+  // manuelle Spannachsen (Rasterindizes) – wenn gesetzt, exakt diese statt Auto-Verteilung
+  let cg = Array.isArray(p && p.columns_grid) ? p.columns_grid.map(Number).filter(k => Number.isInteger(k) && k >= 0) : null;
+  cg = (cg && cg.length) ? [...new Set(cg)].sort((a, b) => a - b) : null;
+  // Startachse der Auto-Verteilung: 0 = 1. Rasterachse (Standard/Bestand), 1 = 2. Rasterachse
+  const sa = (p && (p.start_axis_grid === 1 || p.start_axis_grid === "1")) ? 1 : 0;
+  // Reststueck am oberen Wandabschluss ([Z-6]). `rod_rest_mm` ist das in Modul 1 als Reststueck
+  // gewaehlte Katalogprodukt (genau eins); fehlt es, bleibt die Zerlegung wie bisher und der
+  // Konflikt wird je Segment sichtbar gemeldet. `rod_overhang_mm` ist der Ueberstand ueber die
+  // Wandoberkante — konfigurierbar, weil er von Kopfblech/Spannplatte + Spannmutter abhaengt.
+  // Blechdicken ([A-1]): BAUTEILMASSE und damit ausschliesslich Katalogsache. Es gibt dafuer
+  // KEINE Core-Konstante mehr (die frueheren 15 bzw. 10 mm in `BLECH_THICK` waren ein
+  // hartkodiertes Produktmass an der falschen Stelle) und KEINEN Default. Beide Werte gehen in
+  // keine Rechnung ein — die Oberkante Bodenblech IST die Steinunterkante ([A-19]) —, sie
+  // werden allein AUSGEWIESEN. Fehlt oder widerspricht das Katalogmass, bleibt die Dicke `null`
+  // und die Ausgaben benennen die Luecke, statt eine Zahl zu erfinden ([P-9]); Mengen,
+  // Geometrie und Nachweis sind davon bit-genau unberuehrt. Dieselbe Bahn wie beim
+  // Kopfzuschlag aus der Spannplattendicke ([Z-8]).
+  const bd = (p && p.blech_dicke_mm != null && +p.blech_dicke_mm > 0) ? +p.blech_dicke_mm : null;
+  const kbd = (p && p.kopfblech_dicke_mm != null && +p.kopfblech_dicke_mm > 0) ? +p.kopfblech_dicke_mm : null;
+  const rr = (p && p.rod_rest_mm != null && +p.rod_rest_mm > 0) ? +p.rod_rest_mm : 0;
+  const ue = (p && p.rod_overhang_mm != null && +p.rod_overhang_mm >= 0) ? +p.rod_overhang_mm : ROD_OVERHANG;
+  const out = { max_span_grid: m, force_kN: fk, rod_mm: rod, rod_lengths_mm: rodL, blech_mm: blech,
+           blech_lengths_mm: blechL,
+           blech_dicke_mm: bd, kopfblech_dicke_mm: kbd,
+           top_connection: top, columns_grid: cg, start_axis_grid: sa,
+           rod_rest_mm: rr, rod_overhang_mm: ue };
+  // Manuelle Zwischenspannpunkte ([A-17]) sind ein OVERRIDE: der Schluessel entsteht nur, wenn
+  // er ausdruecklich gesetzt ist. Fehlt er, gilt die Auto-Ableitung ([A-15]) — und weil sie
+  // nirgends gespeichert wird, entsteht im Wandelement AUCH KEIN Feld dafuer. `buildWall`
+  // ersetzt die rohe Liste unten durch die validierte (dedupliziert, sortiert).
+  if (Array.isArray(p && p.zwischenpunkte_mm)) out.zwischenpunkte_mm = p.zwischenpunkte_mm.slice();
+  // Manuell gesetzte Ausgleichspunkte ([A-24]) sind aus genau demselben Grund ein OVERRIDE: der
+  // Schluessel entsteht nur, wenn er ausdruecklich gesetzt ist. Fehlt er, gilt die Verteilung
+  // nach [A-20]…[A-23] — und weil die nirgends gespeichert wird, entsteht im Wandelement AUCH
+  // KEIN Feld dafuer. `buildWall` ersetzt die rohe Liste unten durch die validierte.
+  if (Array.isArray(p && p.ausgleich_override_mm)) out.ausgleich_override_mm = p.ausgleich_override_mm.slice();
+  // Manuell gesetzte Deckenanschlusspunkte ([A-27]) sind aus genau demselben Grund ein OVERRIDE:
+  // der Schluessel entsteht nur, wenn er ausdruecklich gesetzt ist. Fehlt er, gilt die Verteilung
+  // nach [A-26] — und weil die nirgends gespeichert wird, entsteht im Wandelement AUCH KEIN Feld
+  // dafuer. `buildWall` ersetzt die rohe Liste unten durch die validierte, sobald die Spannachsen
+  // feststehen (vorher ist gar nicht entscheidbar, ob ein Index eine Achse ist).
+  if (Array.isArray(p && p.deckenanschluss_grid)) out.deckenanschluss_grid = p.deckenanschluss_grid.slice();
+  // Manuell gewaehlte Bodenblech-Aussparungen ([A-28], #138) sind eine kanonische
+  // PLANUNGSEINGABE und stehen deshalb — wie der Vorratssatz der Bodenblechlaengen — im
+  // Vorspannblock des Wandelements. Der Schluessel entsteht NUR, wenn er ausdruecklich gesetzt
+  // ist: eine Wand ohne Aussparungen bekommt kein Feld, das es vorher nicht gab, und bleibt
+  // strukturell und mengenmaessig bit-genau unveraendert. `buildWall` ersetzt die rohe Liste
+  // unten durch die validierte (dedupliziert, sortiert).
+  if (Array.isArray(p && p.base_plate_aussparungen_grid))
+    out.base_plate_aussparungen_grid = p.base_plate_aussparungen_grid.slice();
+  // Einbaulagen des Spannsystems ([Z-6]/#92) — beide ABGELEITETE Rechenwerte, die Modul 1 aus
+  // den gewaehlten Katalogprodukten bildet (Praezedenz `rod_rest_mm`): der Fussoffset aus der
+  // halben Kopplungsmutterhoehe, der Kopfzuschlag aus der Spannplattendicke.
+  // KEIN Produktmass, keine Produkt-ID und kein Preis wandert dadurch ins Wandelement.
+  //
+  // Beide Felder sind OPTIONAL: fehlt eines oder ist es ungueltig, entsteht der Schluessel
+  // gar nicht erst — der Bedarf ist dann bit-genau der bisherige. Ein fehlendes Katalogmass
+  // wird NIE durch einen Altwert ersetzt; Modul 1 meldet die
+  // Luecke sichtbar, statt sie zu fuellen.
+  const fo = (p && p.rod_fuss_offset_mm != null && +p.rod_fuss_offset_mm > 0) ? +p.rod_fuss_offset_mm : 0;
+  const kz = (p && p.rod_kopf_zuschlag_mm != null && +p.rod_kopf_zuschlag_mm > 0) ? +p.rod_kopf_zuschlag_mm : 0;
+  if (fo > 0) out.rod_fuss_offset_mm = fo;
+  if (kz > 0) out.rod_kopf_zuschlag_mm = kz;
+  // Schluesselweite der Kopplungsmutter (#97) — das Werkzeugmass ueber die Schluesselflaechen und
+  // damit die reale BREITE des Bauteils, von Modul 1 aus dem gewaehlten Katalogprodukt abgeleitet.
+  // Sie geht in KEINE Rechnung ein: sie wird hier nur DURCHGEREICHT, damit die Ausgaben die
+  // Mutter masstaeblich zeichnen koennen, ohne den Katalog zu lesen ([D-1]) — dieselbe reine
+  // Ausweisungsbahn wie `blech_dicke_mm`/`kopfblech_dicke_mm` ([A-1]). Kein Produktmass darueber
+  // hinaus, keine Produkt-ID und kein Preis wandert dadurch ins Wandelement.
+  //
+  // OPTIONAL: fehlt das Mass oder ist es ungueltig, entsteht der Schluessel gar nicht erst und
+  // das Ergebnis ist bit-genau das bisherige. Eine Breite wird NIE erfunden ([P-9]).
+  const sw = (p && p.kupplung_sw_mm != null && +p.kupplung_sw_mm > 0) ? +p.kupplung_sw_mm : 0;
+  if (sw > 0) out.kupplung_sw_mm = sw;
+  // Einbauhoehe und Schluesselweite der SPANNMUTTER (#97) — die realen Masse des Bauteils, das
+  // oben auf der Spannplatte sitzt, von Modul 1 aus dem gewaehlten Katalogprodukt abgeleitet.
+  // Auch sie gehen in KEINE Rechnung ein und werden hier nur DURCHGEREICHT, damit die Ausgaben
+  // die Mutter masstaeblich zeichnen koennen, ohne den Katalog zu lesen ([D-1]) — dieselbe
+  // reine Ausweisungsbahn wie `kupplung_sw_mm` und die Blechdicken ([A-1]). Kein Produktmass
+  // darueber hinaus, keine Produkt-ID und kein Preis wandert dadurch ins Wandelement.
+  //
+  // Beide OPTIONAL und voneinander UNABHAENGIG: fehlt eines oder ist es ungueltig, entsteht
+  // genau dieser Schluessel gar nicht erst und das Ergebnis ist bit-genau das bisherige. Ein
+  // Mass wird NIE erfunden ([P-9]).
+  const smH = (p && p.spannmutter_h_mm != null && +p.spannmutter_h_mm > 0) ? +p.spannmutter_h_mm : 0;
+  if (smH > 0) out.spannmutter_h_mm = smH;
+  const smSw = (p && p.spannmutter_sw_mm != null && +p.spannmutter_sw_mm > 0) ? +p.spannmutter_sw_mm : 0;
+  if (smSw > 0) out.spannmutter_sw_mm = smSw;
+  // BREITE der Spannplatte (#97) — das reale Bauteilmass der Auflagerflaeche entlang der Wand,
+  // von Modul 1 aus dem gewaehlten Katalogprodukt (`breite_mm`) abgeleitet. Sie geht in KEINE
+  // Rechnung ein und wird hier nur DURCHGEREICHT, damit die Ausgaben die Platte masstaeblich
+  // zeichnen koennen, ohne den Katalog zu lesen ([D-1]) — dieselbe reine Ausweisungsbahn wie
+  // `kupplung_sw_mm`, die Spannmuttermasse und die Blechdicken ([A-1]). Kein Produktmass darueber
+  // hinaus, keine Produkt-ID und kein Preis wandert dadurch ins Wandelement.
+  //
+  // NICHT zu verwechseln mit `rod_kopf_zuschlag_mm`: das ist die DICKE derselben Platte und ein
+  // echter Rechenwert (er geht unten in den Bedarf ein, s. `kopfZuschlag`). Die Breite tut das
+  // ausdruecklich nicht — deshalb haengt sie auch NICHT am oberen Anschluss: Spannplatten treten
+  // nach `ankerUnten`/`ankerOben` auch an Bruestung und Sturz auf, also unabhaengig davon, ob
+  // oben eine Platte oder ein Kopfblech sitzt.
+  //
+  // OPTIONAL: fehlt das Mass oder ist es ungueltig, entsteht der Schluessel gar nicht erst und
+  // das Ergebnis ist bit-genau das bisherige. Eine Breite wird NIE erfunden ([P-9]).
+  const spB = (p && p.spannplatte_b_mm != null && +p.spannplatte_b_mm > 0) ? +p.spannplatte_b_mm : 0;
+  if (spB > 0) out.spannplatte_b_mm = spB;
+  // Einbauhoehe und Schluesselweite der MUTTER DES EINLEGEBLECHS ([A-16]) und Schluesselweite
+  // der SECHSKANTSCHRAUBE FUSS ([A-19]) (#97) — die realen Masse beider Bauteile, von Modul 1
+  // aus den gewaehlten Katalogprodukten abgeleitet. Auch sie gehen in KEINE Rechnung ein und
+  // werden hier nur DURCHGEREICHT, damit die Ausgaben beide Teile masstaeblich zeichnen
+  // koennen, ohne den Katalog zu lesen ([D-1]) — dieselbe reine Ausweisungsbahn wie die
+  // uebrigen Schluesselweiten und die Blechdicken ([A-1]). Kein Produktmass darueber hinaus,
+  // keine Produkt-ID und kein Preis wandert dadurch ins Wandelement.
+  //
+  // Eine KOPFHOEHE der Schraube gibt es hier bewusst NICHT: sie ist ein festes Normmass der
+  // Zeichnung (`SPANN_MM.kopf_h_mm`, DIN 933 M10, seit 2026-10-07) und kein Wandelementfeld.
+  //
+  // Alle drei OPTIONAL und voneinander UNABHAENGIG: fehlt eines oder ist es ungueltig, entsteht
+  // genau dieser Schluessel gar nicht erst und das Ergebnis ist bit-genau das bisherige.
+  const zpH = (p && p.zp_mutter_h_mm != null && +p.zp_mutter_h_mm > 0) ? +p.zp_mutter_h_mm : 0;
+  if (zpH > 0) out.zp_mutter_h_mm = zpH;
+  const zpSw = (p && p.zp_mutter_sw_mm != null && +p.zp_mutter_sw_mm > 0) ? +p.zp_mutter_sw_mm : 0;
+  if (zpSw > 0) out.zp_mutter_sw_mm = zpSw;
+  const skSw = (p && p.senkkopf_sw_mm != null && +p.senkkopf_sw_mm > 0) ? +p.senkkopf_sw_mm : 0;
+  if (skSw > 0) out.senkkopf_sw_mm = skSw;
+  // Schaftdurchmesser derselben Schraube (2026-10-07, [D-4]) — Nenndurchmesser des Gewindes,
+  // dieselbe reine Ausweisungsbahn, OPTIONAL und unabhaengig.
+  const skD = (p && p.senkkopf_d_mm != null && +p.senkkopf_d_mm > 0) ? +p.senkkopf_d_mm : 0;
+  if (skD > 0) out.senkkopf_d_mm = skD;
+  // BREITE des EINLEGEBLECHS in Wandrichtung ([A-14]) — das reale Bauteilmass, von Modul 1 aus
+  // dem gewaehlten Katalogprodukt (`breite_mm` der Rolle „Einlegeblech") abgeleitet. Es geht in
+  // KEINE Rechnung ein und wird hier nur DURCHGEREICHT, damit die Ausgaben das Blech
+  // masstaeblich zeichnen koennen, ohne den Katalog zu lesen ([D-1]) — dieselbe reine
+  // Ausweisungsbahn wie die Spannplattenbreite. OPTIONAL: fehlt das Mass oder ist es ungueltig,
+  // entsteht der Schluessel gar nicht erst und das Ergebnis ist bit-genau das bisherige ([P-9]).
+  const ebB = (p && p.einlegeblech_b_mm != null && +p.einlegeblech_b_mm > 0) ? +p.einlegeblech_b_mm : 0;
+  if (ebB > 0) out.einlegeblech_b_mm = ebB;
+  return out;
+}
+
+// #136 Eingangsnormalisierung, kein Kantenleser: die Stufenhoehe wird — genau wie x0/x1 auf das
+// GRID — auf das Lagenraster gebracht. Welche Lage damit gemeint ist und wo deren Oberkante
+// liegt, entscheidet danach allein die kanonische Kantenliste in `buildWall`.
+//
+// #136 `maxHoeheMm` ist die REGULAERE Wandhoehe (n x COURSE), nicht die Zielhoehe: eine
+// Staffelung bleibt im 200-mm-Raster und erzeugt NIE eine zweite Ausgleichslage. Ohne
+// Ausgleichslage sind beide Masse identisch und die Normalisierung bit-genau die bisherige.
+function normSteps(steps, lengthMm, maxHoeheMm) {
+  const out = [];
+  for (const s of (steps || [])) {
+    const x0 = Math.max(0, pyRound((s.x0_mm || 0) / GRID) * GRID);
+    const x1 = Math.min(lengthMm, pyRound((s.x1_mm || 0) / GRID) * GRID);
+    const h = Math.max(0, Math.min(maxHoeheMm, pyRound((s.height_mm || 0) / COURSE) * COURSE));
+    if (x1 > x0) out.push({ x0_mm: x0, x1_mm: x1, height_mm: h });
+  }
+  return out;
+}
+
+// ---------- Verzahnungsbereich ([G-10]/[G-11]/[G-12]) ----------
+// Ein Verzahnungsbereich ist ein Laengsabschnitt [g0, g1) der Wand, in dem alternierend in jeder
+// zweiten Lage die Steine fehlen — Zweck ist das konstruktive Ineinandergreifen rechtwinklig
+// kreuzender Einzelwaende. Die Startparitaet (0 = unterste Lage ausgespart, 1 = erst die zweite
+// Lage ausgespart) ist frei waehlbar und bleibt ueber alle Lagen identisch.
+// [G-11] Die Vorspannachsen werden aus dem VOLLSTAENDIGEN Steinverband berechnet, OHNE die
+// Verzahnungsaussparungen — Vorspannung bleibt also bitgleich.
+
+/**
+ * Normalisiert und validiert Verzahnungsbereiche.
+ * @param {Array|null} arr rohe interlocks
+ * @param {number} N Wandlaenge in Rastern
+ * @param {Array<{g0:number,g1:number}>} openings Oeffnungen (zur Ueberlappungspruefung)
+ * @returns {{interlocks:Array<{g0:number,g1:number,start_parity:number}>,fehler:Array<{grund:string,bereich:object}>}}
+ */
+export function normInterlocks(arr, N, openings = []) {
+  if (!Array.isArray(arr) || !arr.length) return { interlocks: [], fehler: [] };
+  const out = [], fehler = [];
+  for (const raw of arr) {
+    const g0 = Number(raw.g0), g1 = Number(raw.g1);
+    const sp = Number(raw.start_parity);
+    const bereich = { g0: raw.g0, g1: raw.g1, start_parity: raw.start_parity };
+    // Ganzzahlig, gueltiges Intervall, innerhalb der Wand
+    if (!Number.isInteger(g0) || !Number.isInteger(g1)) {
+      fehler.push({ grund: "nicht_ganzzahlig", bereich }); continue;
+    }
+    if (g1 <= g0) {
+      fehler.push({ grund: "leeres_intervall", bereich }); continue;
+    }
+    if (g0 < 0 || g1 > N) {
+      fehler.push({ grund: "ausserhalb_wand", bereich }); continue;
+    }
+    if (sp !== 0 && sp !== 1) {
+      fehler.push({ grund: "ungueltige_paritaet", bereich }); continue;
+    }
+    // Ueberlappung mit Oeffnungen
+    let overlap = false;
+    for (const op of openings) {
+      if (g0 < op.g1 && op.g0 < g1) { overlap = true; break; }
+    }
+    if (overlap) {
+      fehler.push({ grund: "ueberlappt_oeffnung", bereich }); continue;
+    }
+    out.push({ g0, g1, start_parity: sp });
+  }
+  // Sortieren nach g0
+  out.sort((a, b) => a.g0 - b.g0);
+  // Ueberlappung untereinander pruefen
+  for (let i = 0; i < out.length - 1; i++) {
+    if (out[i].g1 > out[i + 1].g0) {
+      fehler.push({ grund: "ueberlappt_verzahnung", bereich: out[i + 1] });
+      out.splice(i + 1, 1); i--;
+    }
+  }
+  return { interlocks: out, fehler };
+}
+
+/**
+ * @param {boolean} [ausgleichslageAktiv] #136 Aktivierungs-Flag der oberen Ausgleichslage.
+ *        OPTIONAL und abwaertskompatibel: fehlt es (oder ist es nicht ausdruecklich `true`),
+ *        gilt unveraendert das bisherige Verhalten — nur Vielfache von COURSE sind zulaessig.
+ * @param {{i2?:number[],i3?:number[]}|null} [ausgleichHoehenMm] #136 Steinhoehen, die der
+ *        zugeordnete Katalog fuer die Ausgleichslage fuehrt ([G-16]) — NUR MASSE, keine
+ *        Produkte. OPTIONAL: ohne Angabe passt keine Hoehe und die Ausgleichssteine sind
+ *        Sonderzuschnitte ([G-17]). Auf Geometrie, Verband und Mengen hat das KEINEN Einfluss.
+ */
+export function buildWall(name, lengthMm, heightMm, openings = [], sides = null, prestress = null, steps = [], interlocks = null, ausgleichslageAktiv = false, ausgleichHoehenMm = null) {
+  const PS = normPrestress(prestress);
+  const maxSpan = PS.max_span_grid;
+  const ROD_ = PS.rod_mm;
+  const TOP = PS.top_connection;   // 'blech' (Kopfblech) | 'spannplatte'
+  // #136 Nur ein AUSDRUECKLICHES `true` aktiviert die Ausgleichslage. Alles andere (fehlend,
+  // null, "false") ist der Altstand und wird nie als Aktivierung gedeutet.
+  const AUSGLEICH = ausgleichslageAktiv === true;
+  const Z = validateInputs(lengthMm, heightMm, openings, AUSGLEICH);
+  const N = lengthMm / GRID, L = Z.lagen;
+  // #136 Die KANONISCHE Lagengeometrie: je Lage Unterkante, Oberkante und Hoehe in mm. Ab hier
+  // wird keine Lagenkante mehr aus `Lagenindex x COURSE` gerechnet, sondern aus KANTEN gelesen.
+  // #136 Die oberste Lage kann eine Ausgleichslage mit der Resthoehe sein — jeder Leser unten
+  // rechnet damit unveraendert weiter, weil er die Kante LIEST.
+  const KANTEN = Z.kanten;
+  /** Oberkante der obersten vorhandenen Lage einer Rasterspalte (0 Lagen -> 0 mm). */
+  const oberkanteBisLage = (n) => (n > 0 ? KANTEN[n - 1].oberkante_mm : 0);
+  // [G-10]/[G-12] Verzahnungsbereiche normalisieren und validieren
+  const IL = normInterlocks(interlocks, N, openings);
+  // [A-17] Manuelle Zwischenspannpunkte validieren. Ohne Override bleibt `punkte` null und die
+  // Auto-Ableitung nach [A-15] greift je Segment — gespeichert wird davon nichts.
+  const ZP = normZwischenpunkte(PS.zwischenpunkte_mm, heightMm, COURSE);
+  if (ZP.punkte) PS.zwischenpunkte_mm = ZP.punkte;
+
+  // Staffelung / getreppter Aufbau: je Spalte eine lokale Oberkante (Anzahl Lagen)
+  const STEPS = normSteps(steps, lengthMm, Z.regulaer_hoehe_mm);
+  const topLage = new Array(N);
+  for (let k = 0; k < N; k++) {
+    const xc = (k + 0.5) * GRID; let st = null;
+    for (const s of STEPS) { if (xc >= s.x0_mm && xc < s.x1_mm) { st = s; break; } }
+    // #136 Hier entsteht nur die ANZAHL der Lagen dieser Spalte (Eingangsmass -> Lagenraster,
+    // wie x0/x1 -> GRID). Die zugehoerige Oberkante wird danach aus KANTEN gelesen.
+    // #136 OHNE Staffelung reicht die Spalte an die GLOBALE Oberkante — einschliesslich der
+    // Ausgleichslage. MIT Staffelung bleibt sie im 200-mm-Raster und endet spaetestens auf der
+    // obersten REGULAEREN Lage: eine Stufe erzeugt nie eine zweite Ausgleichslage.
+    topLage[k] = st ? Math.max(0, Math.min(Z.regulaer, pyRound(st.height_mm / COURSE))) : L;
+  }
+  const runsAt = (li) => { const runs = []; let s = null;
+    for (let k = 0; k < N; k++) { const present = topLage[k] > li; if (present) { if (s === null) s = k; } else if (s !== null) { runs.push([s, k]); s = null; } }
+    if (s !== null) runs.push([s, N]); return runs; };
+
+  // ---- Erster Durchgang: VOLLSTAENDIGER Steinverband (Basis fuer occ und Vorspannung) ----
+  // [G-11] Die Spannachsen werden aus dem VOLLSTAENDIGEN Steinverband berechnet, OHNE die
+  // Verzahnungsaussparungen. Dieser erste Durchgang laeuft IMMER — auch bei Verzahnungsbereichen.
+  const courses = []; let prev = new Set();
+  const rigidLagen = []; const invalidSegments = [];
+  for (let li = 0; li < L; li++) {
+    let cuts = runsAt(li);
+    for (const op of openings) {
+      if (op.l0 <= li && li < op.l1) {
+        const nc = [];
+        for (const [s, e] of cuts) {
+          if (op.g1 <= s || op.g0 >= e) { nc.push([s, e]); continue; }
+          if (op.g0 > s) nc.push([s, op.g0]);
+          if (op.g1 < e) nc.push([op.g1, e]);
+        }
+        cuts = nc;
+      }
+    }
+    const stones = []; let joints = new Set(); let rig = false;
+    for (const [s, e] of cuts) {
+      const w = e - s;
+      if (FORBIDDEN_N.has(w)) {
+        rig = true;
+        const seg = { lage: li, start_grid: s, breite_grid: w };
+        if (!invalidSegments.some(x => x.lage === li && x.start_grid === s && x.breite_grid === w))
+          invalidSegments.push(seg);
+      }
+      const comp = pickTiling(s, w, prev);
+      for (const j of segJoints(s, comp)) joints.add(j);
+      let g = s;
+      for (const b of comp) {
+        stones.push({ type: b === 2 ? "i2" : "i3", x0: g * GRID, x1: (g + b) * GRID });
+        g += b;
+      }
+    }
+    if (rig) rigidLagen.push(li);
+    // #136 Jede Lage traegt ihre Geometrie selbst — Unterkante, Oberkante und Hoehe in mm.
+    courses.push({ lage: li, unterkante_mm: KANTEN[li].unterkante_mm,
+      oberkante_mm: KANTEN[li].oberkante_mm, hoehe_mm: KANTEN[li].hoehe_mm,
+      // #136 Nur die Ausgleichslage traegt das Merkmal — eine regulaere Lage bekommt kein Feld,
+      // das sie vorher nicht hatte (die goldenen 200-mm-Fixtures bleiben unveraendert).
+      ...(KANTEN[li].ausgleich ? { ausgleich: true } : {}),
+      stones, joints_grid: [...joints].sort((a, b) => a - b) });
+    prev = joints;
+  }
+
+  // `occ`, `steinIvVoll` und `kopfVoll` basieren auf dem VOLLSTAENDIGEN Verband (vor dem Aussparen) — [G-11].
+  const occ = []; for (let r = 0; r < L; r++) occ.push(new Array(N).fill(false));
+  const steinIvVoll = [];
+  for (const c of courses) for (const st of c.stones) {
+    const a = st.x0 / GRID, b = st.x1 / GRID;
+    for (let cc = a; cc < b; cc++) occ[c.lage][cc] = true;
+    steinIvVoll.push([a, b]);
+  }
+  // [V-3]/[V-11]/[V-12] Die KOPFSTEINE (oberste Lage bzw. lokale Oberkante) tragen die
+  // Grundachsen — VOR dem Aussparen! Aufsteigend sortiert: erster/letzter Kopfstein ([V-11]).
+  const kopfVoll = kopfsteine(courses, occ, L);
+  // [V-11] i2-Stapel (beide Kammern) bzw. i3-Stapel (eine Achse mittig) — am Vollverband.
+  const stapel = stapelBreite(steinIvVoll, N);
+
+  // ---- Zweiter Durchgang: Aussparung fuer Verzahnungsbereiche ([G-10]) ----
+  // Bei gültigen Verzahnungsbereichen wird das Tiling DETERMINISTISCH NEU GERECHNET: die
+  // Bereiche werden wie Luecken aus den runs/cuts herausgeschnitten, bevor `pickTiling` laeuft.
+  // So endet kein Stein im Bereich und der verbleibende Verband wird deterministisch neu gelegt.
+  // Stoßfugen und occ bleiben beim vollstaendigen Verband — Vorspannung bleibt bitgleich ([G-11]).
+  const interlockInvalidSegments = [];
+  if (IL.interlocks.length) {
+    // [G-5] Der REALE Verband wird LAGENUEBERGREIFEND neu gelegt — auch die nicht ausgesparten
+    // Lagen. Sonst blieben sie aus dem Vollverband stehen und ihre Fugen fluchteten mit der
+    // darunter neu gelegten, verkuerzten Lage (#143).
+    // [G-11] bleibt unberuehrt: `occ`, `steinIvVoll` und `kopfVoll` stehen oben bereits aus dem
+    // VOLLSTAENDIGEN Verband fest und werden hier nicht mehr angefasst.
+    let prevIl = new Set();
+    for (let li = 0; li < L; li++) {
+      // cuts aus dem vollstaendigen Verband holen (gleicher Weg wie oben)
+      let cuts = runsAt(li);
+      for (const op of openings) {
+        if (op.l0 <= li && li < op.l1) {
+          const nc = [];
+          for (const [s, e] of cuts) {
+            if (op.g1 <= s || op.g0 >= e) { nc.push([s, e]); continue; }
+            if (op.g0 > s) nc.push([s, op.g0]);
+            if (op.g1 < e) nc.push([op.g1, e]);
+          }
+          cuts = nc;
+        }
+      }
+      // Verzahnungsbereiche DIESER Lage (passende Paritaet) wie Luecken herausschneiden
+      const relevantIls = IL.interlocks.filter(il => li % 2 === il.start_parity);
+      for (const il of relevantIls) {
+        const nc = [];
+        for (const [s, e] of cuts) {
+          if (il.g1 <= s || il.g0 >= e) { nc.push([s, e]); continue; }
+          if (il.g0 > s) nc.push([s, il.g0]);
+          if (il.g1 < e) nc.push([il.g1, e]);
+        }
+        cuts = nc;
+      }
+      // Neues Tiling gegen die REALEN Fugen der Lage darunter
+      const stones = []; const joints = new Set();
+      for (const [s, e] of cuts) {
+        const w = e - s;
+        // Nicht baubare Restbreiten durch Verzahnung melden (getrennt von den strukturellen);
+        // ohne Aussparung in dieser Lage ist die Restbreite strukturell und steht schon oben.
+        if (relevantIls.length && FORBIDDEN_N.has(w)) {
+          const seg = { lage: li, start_grid: s, breite_grid: w };
+          if (!interlockInvalidSegments.some(x => x.lage === li && x.start_grid === s && x.breite_grid === w))
+            interlockInvalidSegments.push(seg);
+        }
+        const comp = pickTiling(s, w, prevIl);
+        for (const j of segJoints(s, comp)) joints.add(j);
+        let g = s;
+        for (const b of comp) {
+          stones.push({ type: b === 2 ? "i2" : "i3", x0: g * GRID, x1: (g + b) * GRID });
+          g += b;
+        }
+      }
+      courses[li].stones = stones;
+      // [G-5] Die Fugen der Lage sind die REALEN Steinberuehrungen des ausgesparten Verbands —
+      // Aussen- und Lueckenkanten zaehlen nicht (`segJoints` liefert nur Fugen INNERHALB eines
+      // zusammenhaengenden Abschnitts).
+      courses[li].joints_grid = [...joints].sort((a, b) => a - b);
+      prevIl = joints;
+    }
+  }
+
+  // [G-5] Fugenversatz benachbarter Lagen — geprueft auf dem REALEN Verband, also NACH der
+  // Verzahnungsaussparung. Ohne Verzahnungsbereiche ist das bitgleich zur Pruefung am Vollverband.
+  let versatzOk = true; const viol = [];
+  for (let li = 0; li < L - 1; li++) {
+    const a = new Set(courses[li].joints_grid);
+    const bad = courses[li + 1].joints_grid.filter(x => a.has(x));
+    if (bad.length) { versatzOk = false; viol.push({ zwischen_lagen: [li, li + 1], fugen_grid: bad.slice().sort((p, q) => p - q) }); }
+  }
+
+  // ---- Ausgleichssteine: Katalogstein oder Sonderzuschnitt ([G-16]/[G-17]/[G-18]) ----
+  // Erst HIER, nach BEIDEN Tiling-Durchgaengen: der Verzahnungsdurchgang oben ersetzt die
+  // Steinliste einer Lage vollstaendig — eine frueher gesetzte Kennzeichnung waere verloren.
+  // Gekennzeichnet wird NUR die Ausgleichslage und dort NUR der Sonderfall; eine regulaere Lage
+  // und jede reine 200-mm-Wand bekommen kein Feld, das sie vorher nicht hatten.
+  const AGH = normAusgleichHoehen(ausgleichHoehenMm);
+  const ausgleichSonder = [];
+  for (const c of courses) {
+    if (c.ausgleich !== true) continue;
+    const anz = { i2: 0, i3: 0 };
+    for (const st of c.stones) {
+      const hoehen = AGH[st.type] || [];
+      // EXAKT, ohne Toleranz: die Kataloghoehe muss die Lagenhoehe treffen ([G-16]).
+      if (hoehen.some((h) => Math.abs(h - c.hoehe_mm) < 1e-9)) continue;
+      st.sonder = true;
+      anz[st.type] += 1;
+    }
+    for (const typ of ["i3", "i2"]) {
+      if (!anz[typ]) continue;
+      ausgleichSonder.push({ lage: c.lage, typ, hoehe_mm: c.hoehe_mm, anzahl: anz[typ],
+        text: ausgleichPruefhinweis(typ, c.hoehe_mm) });
+    }
+  }
+
+  // ---- Spannachsen ----------------------------------------------------------------
+  // Hierarchie (Fassung 29.10.2026): [V-1] Kammerraster > [V-9] manuelle Achsen > [V-3]/[V-11]
+  // Grundachsen aus den KOPFSTEINEN (oberste Lage) > [V-2] Steinabdeckung (MUSS, additiv) >
+  // [V-7]/[V-8] Zusatzachsen an Stufen-/Oeffnungskanten > [V-4] Maximalabstand als OBERGRENZE >
+  // [V-12] Symmetrie der i3-Kopfsteine (MUSS, schliesst ab).
+  //
+  // [V-3] ist eine GRUNDACHSE: die Mitte jedes i3-Kopfsteins wird gesetzt, auch wenn der Stein
+  // ohnehin schon gehalten waere. Bezugslage ist seit 29.10.2026 (Miro R01, SA 2) die OBERSTE
+  // statt der untersten Lage. [V-11] ergaenzt die Randlage aus demselben Verband und spannt den
+  // i2-Stapel in beiden Kammern. [V-5] (Startachse) ist ABGELOEST.
+  //
+  // [V-4] ist bewusst nicht die Verteilungsregel: die Steinabdeckung [V-2] impliziert den Abstand
+  // NICHT (nachweisbar entstehen sonst Luecken bis 5 Raster = 625 mm, obwohl jeder Stein gehalten
+  // ist), und umgekehrt beweist ein eingehaltenes Maximalraster die Abdeckung nicht. Beide Regeln
+  // sind unabhaengig und beide gelten.
+  //
+  // [V-12] (SA 2/KKI 2) haelt jeden i3-Kopfstein SYMMETRISCH: entweder nur mittig (Feld 2) oder in
+  // Feld 1 UND Feld 3. Die Mitte wird dabei nur entfernt, wenn sie keine Zusatzachse [V-7]/[V-8]
+  // ist und [V-4] mindestens 2 Raster erlaubt. Das verletzt weder [V-2] (jeder Stein, der die Mitte
+  // enthaelt, enthaelt auch Feld 1 oder Feld 3 — kein Stein ist schmaler als 2 Raster) noch [V-4]
+  // (der Abstand Feld 1 -> Feld 3 ist 2, die Abstaende nach aussen werden nur kleiner).
+  // [G-11] Steinabdeckung basiert auf dem VOLLSTAENDIGEN Verband (steinIvVoll, vor dem Aussparen).
+  // Deterministische Reihenfolge fuer den Stabbing-Greedy: nach rechtem, dann linkem Rand.
+  steinIvVoll.sort((p, q) => (p[1] - q[1]) || (p[0] - q[0]));
+  /** Wird das Rasterintervall [a,b) von mindestens einer Achse aus `S` durchgangen? */
+  const gehalten = (S, a, b) => { for (let k = a; k < b; k++) if (S.has(k)) return true; return false; };
+
+  let colArr;
+  if (PS.columns_grid) {
+    // [V-9] Sonderkonstruktion: exakt die manuell gesetzten Achsen verwenden. Sie werden NICHT
+    // ergaenzt (auch nicht um [V-2]/[V-4]/[V-12]) — der Anwender uebernimmt die Verteilung ganz.
+    // Verletzungen der Muss-Regel [V-2] werden unten sichtbar gemeldet.
+    colArr = PS.columns_grid.filter(k => k >= 0 && k < N).sort((a, b) => a - b);
+  } else {
+    // [V-3]/[V-11] Grundachsen: allein aus den Kopfsteinen (vollstaendiger Verband, [G-11]).
+    // Mitte jedes i3; bei einem i2 am Wandanfang die 2. Rasterachse, bei einem i2 am Wandende
+    // die 2. Rasterachse von rechts; im i2-Stapel beide Kammern.
+    //
+    // [V-5] ist abgeloest: `PS.start_axis_grid` wird hier NICHT gelesen. Das Feld bleibt im
+    // Datenmodell erhalten (normPrestress fuehrt es unveraendert weiter), damit gespeicherte
+    // Projekte lesbar bleiben — es ist unwirksamer Altbestand.
+    const colSet = grundachsen(kopfVoll, N, stapel);
+    // Zusatzachsen [V-7]/[V-8] sind GESCHUETZT: [V-12] entfernt nie eine von ihnen.
+    const schutz = new Set();
+    // [V-8] Oeffnungen: beidseitig eine Achse (die Steine daneben tragen den Sturz ab).
+    for (const op of openings) { if (op.g0 - 1 >= 0) schutz.add(op.g0 - 1); if (op.g1 <= N - 1) schutz.add(op.g1); }
+    // [V-7] Stufenkanten: an jeder Höhenstufe ein Strang beidseitig der Kante.
+    for (let k = 0; k < N - 1; k++) { if (topLage[k] !== topLage[k + 1]) { schutz.add(k); schutz.add(k + 1); } }
+    for (const k of schutz) colSet.add(k);
+    // [V-12] Zelle -> Anfang des i3-Kopfsteins, der sie enthaelt (-1: kein i3-Kopfstein).
+    const kopfI3 = new Array(N).fill(-1);
+    for (const [a, b] of kopfVoll) if (b - a === 3) for (let k = a; k < b; k++) kopfI3[k] = a;
+    // [V-2] MUSS: jeder Stein jeder Lage wird von mindestens einer Achse durchgangen.
+    // Stabbing-Greedy ueber alle Steine. Gesetzt wird die RECHTESTE Zelle des Steins, die in
+    // KEINEM i3-Kopfstein liegt (sie laesst die i3 der obersten Lage mittig, [V-12] „bevorzugt
+    // in der Mitte"). Liegen alle Zellen in i3-Kopfsteinen, wird der Kopfstein, der dem WANDENDE
+    // am naechsten liegt (Gleichstand: der linke), in Feld 1 UND Feld 3 gespannt — KKI 2 „im
+    // ersten i3 doppelt in Feld 1 und Feld 3". Rein additiv; die Mitte raeumt erst [V-12] ab.
+    for (const [a, b] of steinIvVoll) {
+      if (gehalten(colSet, a, b)) continue;
+      let frei = -1;
+      for (let k = b - 1; k >= a; k--) if (kopfI3[k] < 0) { frei = k; break; }
+      if (frei >= 0) { colSet.add(frei); continue; }
+      let ziel = -1, zielD = Infinity;
+      for (let k = a; k < b; k++) {
+        const s0 = kopfI3[k], d = Math.min(s0, N - (s0 + 3));
+        if (d < zielD || (d === zielD && s0 < ziel)) { zielD = d; ziel = s0; }
+      }
+      colSet.add(ziel); colSet.add(ziel + 2);
+    }
+    // [V-4] Obergrenze: verbleibende Luecken > max_span_grid balanciert auffuellen (rein additiv,
+    // die Abdeckung aus [V-2] bleibt dabei zwingend erhalten).
+    const roh = [...colSet].filter(k => k >= 0 && k < N).sort((a, b) => a - b);
+    const fin = new Set(roh);
+    for (let i = 0; i + 1 < roh.length; i++) {
+      if (roh[i + 1] - roh[i] > maxSpan) for (const c of balancedFill(roh[i], roh[i + 1], maxSpan)) fin.add(c);
+    }
+    // [V-12] MUSS: jeder i3-Kopfstein symmetrisch — nur mittig, oder Feld 1 UND Feld 3. Traegt
+    // er eine Achse in Feld 1 oder Feld 3, wird die Gegenseite ergaenzt und die Mitte entfernt,
+    // sofern sie nicht geschuetzt ist und [V-4] mindestens 2 Raster erlaubt (sonst bleiben alle
+    // drei Felder belegt — auch das ist symmetrisch).
+    for (const [a, b] of kopfVoll) {
+      if (b - a !== 3) continue;
+      if (!fin.has(a) && !fin.has(a + 2)) continue;
+      fin.add(a); fin.add(a + 2);
+      if (fin.has(a + 1) && !schutz.has(a + 1) && maxSpan >= 2) fin.delete(a + 1);
+    }
+    colArr = [...fin].filter(k => k >= 0 && k < N).sort((a, b) => a - b);
+  }
+  // [V-2] Nachweis der Steinabdeckung. Im Auto-Pfad ist die Liste konstruktionsbedingt leer und
+  // dient als Selbstkontrolle; bei manuellen Achsen ([V-9]) ist sie der geforderte Abgleich gegen
+  // die Muss-Regel. Sichtbar gemeldet, aber KEIN Baubarkeitsausschluss: die Sonderkonstruktion
+  // ist eine bewusste Anwenderentscheidung und wird nie still korrigiert.
+  const achsSet = new Set(colArr);
+  const ungehalteneSteine = [];
+  for (const c of courses) for (const st of c.stones) {
+    const a = st.x0 / GRID, b = st.x1 / GRID;
+    if (!gehalten(achsSet, a, b))
+      ungehalteneSteine.push({ lage: c.lage, start_grid: a, breite_grid: b - a, typ: st.type });
+  }
+  const columns = [];
+  let anchSenkkopf = 0, anchSpannmutter = 0, anchSpannplatten = 0;
+  for (const k of colArr) {
+    const localTop = oberkanteBisLage(topLage[k]);
+    const segs = []; let r = 0;
+    while (r < L) {
+      if (!occ[r][k]) { r++; continue; }
+      let r2 = r; while (r2 + 1 < L && occ[r2 + 1][k]) r2++;
+      // #136 Segmentfuss und -kopf sind die kanonischen Kanten der beteiligten Lagen.
+      const z0 = KANTEN[r].unterkante_mm, z1 = KANTEN[r2].oberkante_mm, h = z1 - z0;
+      // Anschluss-Ausbildung je Segmentende:
+      //   Fuß der Wand (z0==0)      -> Bodenblech: Senkkopfschraube + Kopplungsmutter
+      //   Wandoberkante (z1==Top)   -> Kopfblech (Spannmutter) ODER Spannplatte (Platte + Spannmutter)
+      //   Zwischenende (an Öffnung) -> Spannplatte auf der Steinkante (Platte + Spannmutter)
+      const bottomBase = z0 === 0;
+      const topReach = z1 === localTop;
+      // [Z-2]/[Z-3]/[Z-6] Die Stuecke eines Segments sind ECHTE Standardlaengen aus dem
+      // Vorratssatz plus hoechstens ein Sonderzuschnitt; an der Wandoberkante sitzt darueber
+      // zwingend das Reststueck. Diese Stueckliste ist die KANONISCHE Ableitung — Stueckzahl,
+      // Kopplungen (Montage) und Mengen (BOM) lesen ausschliesslich sie, es gibt keine zweite
+      // Rechnung aus einer pauschalen Stangenlaenge. Nur SEGMENTE MIT OBERKANTENBEZUG erhalten
+      // Reststueck und Ueberstand — Bruestung/Sturz an einer Oeffnung bleiben unveraendert.
+      // [A-14]/[A-15]/[Z-7] Wirksame Zwischenspannpunkte dieses Segments; ihre Hoehen sind fuer
+      // Kopplungen gesperrt. Uebergeben werden sie RELATIV zum Segmentfuss, weil die Kombination
+      // die Strecke rechnet und ihre absolute Lage nicht kennt.
+      const ankerUnten = bottomBase ? "bodenblech" : "spannplatte";
+      const ankerOben = topReach ? (TOP === "blech" ? "kopfblech" : "spannplatte") : "spannplatte";
+      // #92 Einbaulagen: der Fussoffset gilt NUR am Bodenblech (ein Segment ueber einer
+      // Oeffnung sitzt auf einer Spannplatte und beginnt unveraendert am Segmentfuss), der
+      // Kopfzuschlag NUR unter einer wirklich gewaehlten Spannplatte — bei Kopfblech gibt es
+      // keine Platte, und ein Kopfblechmass wird dafuer nicht ersatzweise genommen.
+      const fussOffset = bottomBase ? (PS.rod_fuss_offset_mm || 0) : 0;
+      const kopfZuschlag = (ankerOben === "spannplatte") ? (PS.rod_kopf_zuschlag_mm || 0) : 0;
+      const zpSeg = zwischenpunkteSegment(z0, z1, ZP.punkte, KANTEN);
+      // Die Sperren sind relativ zur bestueckten Strecke — also zum STANGENFUSS, nicht zum
+      // Segmentfuss. Ohne den Offset wanderte jede [Z-7]-Sperre um genau diesen Betrag.
+      const kombi = kombiniereSegment(h, PS.rod_lengths_mm, topReach, PS.rod_rest_mm,
+        PS.rod_overhang_mm, zpSeg.map((z) => z - z0 - fussOffset), MIN_FERTIGMASS_MM,
+        fussOffset, kopfZuschlag);
+      const stuecke = kombi.stuecke, stueck = stuecke.length;
+      const quelleSumme = stuecke.reduce((a, s) => a + s.quelle_mm, 0);
+      let segSenkkopf = 0, segSpannmutter = 0, segSpannplatten = 0;
+      if (bottomBase) segSenkkopf++; else { segSpannmutter++; segSpannplatten++; }
+      if (ankerOben === "kopfblech") segSpannmutter++; else { segSpannmutter++; segSpannplatten++; }
+      anchSenkkopf += segSenkkopf; anchSpannmutter += segSpannmutter; anchSpannplatten += segSpannplatten;
+      segs.push({ z0_mm: z0, z1_mm: z1, lage0: r, lage1: r2 + 1, gewindestangen: stueck,
+        stuecke, zuschnitt_konflikt: kombi.konflikt,
+        // `bedarf_mm` = tatsaechlich zu bestueckende Stanglaenge (an der Oberkante h + Ueberstand,
+        // sonst h). Der Verschnitt misst sich daran, damit der Ueberstand NICHT als Verschnitt
+        // erscheint — er ist eingebautes Material.
+        // `ueberstand_mm` misst weiterhin das Material UEBER der Steinoberkante (jetzt
+        // Spannplattendicke + Ueberstand) — der Fussoffset kuerzt unten und gehoert nicht hinein.
+        bedarf_mm: kombi.bedarf_mm, ueberstand_mm: kombi.bedarf_mm - h + fussOffset,
+        letzte_stange_mm: stueck ? stuecke[stueck - 1].len_mm : h,
+        // Ein Zuschnittkonflikt kann `stuecke` LEER lassen ([Z-6]: `reststueck_zu_lang`,
+        // `kein_ausgangsprodukt`). Dann gibt es keine Stange, also auch keine Kopplung und
+        // keinen Verschnitt: die Zaehlung darf nicht ins Negative laufen (−1 Kopplungsmutter
+        // je Segment lief bisher in jede Summe und damit in die Stueckliste).
+        verschnitt_mm: stueck ? quelleSumme - kombi.bedarf_mm : 0,
+        verbindungsmuttern: Math.max(0, stueck - 1), anker_unten: ankerUnten, anker_oben: ankerOben,
+        senkkopfschrauben: segSenkkopf, spannplatten: segSpannplatten, spannmuttern: segSpannmutter,
+        // [Z-9] Feste Stangenfolge angewandt oder Rueckfall auf [Z-2] (mit Grund). Das Feld gibt
+        // es NUR an Segmenten, fuer die die Regel zustaendig ist (Oberkante + Reststueck).
+        ...(kombi.schema ? { stangenschema: kombi.schema } : {}),
+        ...(kombi.schema_grund ? { stangenschema_grund: kombi.schema_grund } : {}) });
+      // `z0_mm` bleibt STEINGEOMETRIE (daran haengen Lagen, Belegung und die Zwischenpunkte).
+      // Der reale Stangenbeginn liegt um `fussOffset` hoeher, bekommt hier aber BEWUSST KEIN
+      // eigenes Feld: die zeichnenden Leser leiten ihn seit #128 selbst aus `anker_unten` +
+      // `prestress.rod_fuss_offset_mm` ab (`_fussOffset` in sembla-montage.js) — dieselbe
+      // Weiche wie oben, und ein Datum ohne eigenen Leser waere ein zweites, ungeprueftes
+      // Geometriemodell neben `bedarf_mm`/`stuecke`. Die frueher hier benannte Luecke aus #97
+      // (Stuecke gezeichnet ab `z0_mm` statt ab dem Stangenbeginn) ist damit GESCHLOSSEN.
+      r = r2 + 1;
+    }
+    if (!segs.length) continue;
+    const durch = segs.length === 1 && segs[0].z0_mm === 0 && segs[0].z1_mm === localTop;
+    columns.push({ k, x_mm: CHAMBER_OFFSET + GRID * k, durchgehend: durch, segments: segs,
+      gewindestangen: segs.reduce((a, sg) => a + sg.gewindestangen, 0),
+      verbindungsmuttern: segs.reduce((a, sg) => a + sg.verbindungsmuttern, 0),
+      senkkopfschrauben: segs.reduce((a, sg) => a + sg.senkkopfschrauben, 0),
+      spannplatten: segs.reduce((a, sg) => a + sg.spannplatten, 0),
+      spannmuttern: segs.reduce((a, sg) => a + sg.spannmuttern, 0) });
+  }
+  let spanOk = true;
+  for (let r = 0; r < L; r++) {
+    let c = 0;
+    while (c < N) {
+      if (!occ[r][c]) { c++; continue; }
+      let c2 = c; while (c2 + 1 < N && occ[r][c2 + 1]) c2++;   // gefüllter Bereich [c..c2]
+      const present = columns.filter(col => col.k >= c && col.k <= c2 && col.segments.some(sg => sg.lage0 <= r && r < sg.lage1)).map(col => col.k);
+      for (let i = 0; i < present.length - 1; i++) if (present[i + 1] - present[i] > maxSpan) spanOk = false;
+      c = c2 + 1;
+    }
+  }
+  // Stoßfugen (vertikale Fugen zwischen Steinen) -> Dichtstreifen (je 200 mm hoch = 1 Steinreihe)
+  const stossfugen = courses.reduce((a, c) => a + c.joints_grid.length, 0);
+
+  // Stahlbleche: das Bodenblech liegt über die volle Wandlänge, besteht dort aber aus REALEN
+  // Teilen ([A-10]/[A-11]/[A-12]) statt aus einer Modulzählung; Kopfblech unverändert nur bei
+  // top_connection=='blech' und weiterhin in Modulen der Blechlänge (Slicing folgt getrennt).
+  const occCols = topLage.filter(t => t > 0).length;
+  const topEdgeLen = occCols * GRID;
+  // [A-28]/[A-30] Die manuell gewaehlten Aussparungsfelder werden GENAU HIER normalisiert und
+  // validiert; abgewiesene Eintraege werden benannt und nicht angewandt.
+  const AS = normBodenblechAussparungen(PS.base_plate_aussparungen_grid, N);
+  if (AS.felder) PS.base_plate_aussparungen_grid = AS.felder;
+  const bodenZerlegung = zerlegeBodenblech(lengthMm, PS.blech_lengths_mm,
+    courses.length ? courses[0].joints_grid : [], AS.bereiche);
+  const bodenTeile = bodenZerlegung.teile;
+  const bodenModule = bodenTeile.length;      // Anzahl REALER Bodenblechteile
+  const kopfModule = (TOP === "blech") ? Math.ceil(topEdgeLen / PS.blech_mm) : 0;
+  // [A-29] Die ausgesparte Laenge erzeugt kein Teil und keine Menge: das Bodenblech ist genau so
+  // lang wie die Summe seiner belegten Bereiche. Ohne Aussparungen ist das die volle Wandlaenge.
+  const ausgespartMm = bodenZerlegung.luecken.reduce((a, lu) => a + lu.laenge_mm, 0);
+  const bodenLaenge = lengthMm - ausgespartMm;
+  const basePlate = { rolle: "bodenblech", laenge_mm: bodenLaenge, breite_mm: THICK, dicke_mm: PS.blech_dicke_mm, modul_mm: PS.blech_mm, module: bodenModule, teile: bodenTeile,
+    // [A-28] Die kanonischen Luecken — nur wenn es welche gibt.
+    ...(bodenZerlegung.luecken.length ? { aussparungen: bodenZerlegung.luecken } : {}) };
+  const topPlate = (TOP === "blech")
+    ? { rolle: "kopfblech", laenge_mm: topEdgeLen, breite_mm: THICK, dicke_mm: PS.kopfblech_dicke_mm, modul_mm: PS.blech_mm, module: kopfModule }
+    : null;
+
+  // [A-20]…[A-23] Ausgleichspunkte unter dem Bodenblech. Gelesen werden ausschliesslich
+  // FERTIGE Werte — Wandlaenge, die inneren Stoesse der Bodenblechteile und die Spannachsen;
+  // geschrieben wird in keine davon zurueck. Der Kern rechnet allein die LAGE der Punkte und
+  // leitet daraus selbst nichts ab. Die Stuecklistenmenge — genau ein Ausgleichsblech je Punkt
+  // ([A-18]) — entsteht in der gemeinsamen Ausgabeschicht `sembla-bom.js` aus der LAENGE dieser
+  // Liste; ein statischer Nachweis der Auflagerpunkte ist weiterhin ausdruecklich keiner.
+  // [A-24] Ein ausdruecklich gesetzter Override SPERRT die Verteilung vollstaendig: es gelten
+  // genau die gesetzten Punkte — nicht aufgefuellt ([A-22]) und ohne nachgeschobenen Pflichtpunkt
+  // ([A-21]). Ohne Override laeuft unveraendert die Verteilung nach [A-20]…[A-23].
+  const AG = normAusgleichspunkte(PS.ausgleich_override_mm, lengthMm);
+  if (AG.punkte) PS.ausgleich_override_mm = AG.punkte;
+  // [A-21]/[A-29] Ein Blechstoss ist nur, wo zwei Bodenbleche WIRKLICH aneinanderstossen. Die
+  // Kante einer Aussparung ist keiner — dort endet das Blech frei — und traegt darum keinen
+  // Stosspunkt; als BEREICHSENDE ist sie nach [A-31] trotzdem ein Pflichtauflager.
+  const bodenStoesse = [];
+  for (let i = 0; i + 1 < bodenTeile.length; i++) {
+    const e = bodenTeile[i].x0_mm + bodenTeile[i].raster_mm;
+    if (e === bodenTeile[i + 1].x0_mm) bodenStoesse.push(e);
+  }
+  // [A-31] Verteilt wird JE REAL BELEGTEM Bereich — dieselben Bereiche, aus denen die
+  // Bodenbleche zerlegt wurden ([A-29]), damit kein Punkt in einer Aussparung landet und keiner
+  // an einem ueberholten frueheren Stoss stehen bleibt. Ohne Aussparungen ist die Liste
+  // bit-genau die bisherige.
+  const ausgleichspunkte = AG.punkte
+    ? AG.punkte.map((x) => ({ x_mm: x, art: "manuell" }))
+    : verteileAusgleichspunkte(lengthMm, bodenStoesse, columns.map((c) => c.x_mm),
+                               AUSGLEICH_ACHSVERSATZ, bodenZerlegung.bereiche);
+
+  // [A-26]/[A-27] Deckenanschlusspunkte auf den Spannachsen. Gelesen werden ausschliesslich
+  // FERTIGE Werte — Wandlaenge und die eben gebildeten Spannachsen; geschrieben wird in keine
+  // davon zurueck. Der Kern rechnet allein die LAGE der Punkte; die Stuecklistenmenge (eine
+  // Baugruppe „Deckenanschluss" je Punkt, [P-24]) entsteht spaeter in der gemeinsamen
+  // Ausgabeschicht aus der LAENGE dieser Liste. Ein Verankerungsnachweis ist das ausdruecklich
+  // nicht — die statische Kraftuebergabe in Modul 3 bleibt unberuehrt.
+  // [A-27] Ein ausdruecklich gesetzter Override SPERRT die Verteilung vollstaendig: es gelten
+  // genau die gesetzten Achsen, es wird nichts aufgefuellt. Ohne Override laeuft [A-26].
+  const achsenK = columns.map((c) => c.k);
+  const DC = normDeckenanschluss(PS.deckenanschluss_grid, achsenK, N);
+  if (DC.punkte) PS.deckenanschluss_grid = DC.punkte;
+  const dcK = DC.punkte ? DC.punkte : verteileDeckenanschluss(achsenK, N);
+  const deckenanschlusspunkte = dcK.map((k) => ({
+    k, x_mm: CHAMBER_OFFSET + GRID * k, art: DC.punkte ? "manuell" : "auto" }));
+  // [A-26] Nur der Auto-Pfad wird gegen die 1125-mm-Vorgabe gehalten: ein Override sperrt die
+  // Verteilung vollstaendig ([A-27]) und ist die ausdrueckliche Entscheidung des Planers.
+  const dcLuecken = DC.punkte ? [] : deckenanschlussLuecken(dcK);
+  // [A-26]/[A-27] Randfelder (DA 2/DA 3) gelten fuer BEIDE Pfade: ein gesetzter Punkt in Feld 1
+  // oder ein fehlender Anschluss bis Feld 3 wird benannt, nie verschoben. Eine ausdruecklich
+  // LEERE Override-Liste ist die Aussage „kein Deckenanschluss an dieser Wand" und erzeugt
+  // keinen Randbefund.
+  const dcRand = (DC.punkte && !DC.punkte.length) ? [] : deckenanschlussRand(dcK, N);
+
+  const bom = { i2: 0, i3: 0 };
+  for (const c of courses) for (const s of c.stones) bom[s.type] += 1;
+  bom.gewindestangen = columns.reduce((a, c) => a + c.gewindestangen, 0);
+  bom.verbindungsmuttern = columns.reduce((a, c) => a + c.verbindungsmuttern, 0);
+  bom.senkkopfschrauben = anchSenkkopf;
+  bom.kopplungsmuttern_basis = anchSenkkopf;   // eine Kopplungsmutter je Fußanker
+  bom.spannplatten = anchSpannplatten;
+  bom.spannmuttern = anchSpannmutter;
+  bom.stahlblech_module = bodenModule + kopfModule;
+  // [A-29] Nur die belegte Bodenblechlaenge geht in die Menge ein — ausgesparte Laenge nie.
+  bom.stahlblech_mm = bodenLaenge + (TOP === "blech" ? topEdgeLen : 0);
+  bom.stahlblech_dicke_mm = PS.blech_dicke_mm;
+  bom.stossfugen = stossfugen;
+  // #136 Die Hoehe eines Dichtstreifens ist die Hoehe SEINER Lage — gelesen, nicht gerechnet.
+  bom.dichtstreifen_mm = courses.reduce((a, c) => a + c.joints_grid.length * c.hoehe_mm, 0);
+  bom.verschnitt_mm = columns.reduce((a, c) => a + c.segments.reduce((b, sg) => b + sg.verschnitt_mm, 0), 0);
+
+  // [Z-5]/[Z-6] Zuschnitt-Konflikte sichtbar machen (nie still): je betroffenes Segment ein
+  // Eintrag. Sie sind KEIN Baubarkeitsausschluss (die Mengen bleiben unveraendert), sondern eine
+  // ausdrueckliche Meldung, dass der Vorratssatz kein einbaubares Fertigmass zulaesst
+  // (`mindestmass`/`kein_ausgangsprodukt`/`keine_standardlaenge`) bzw. dass fuer den oberen
+  // Wandabschluss kein Reststueck gewaehlt ist (`kein_reststueck`) oder das gewaehlte laenger
+  // ist als das ganze Segment (`reststueck_zu_lang`). Ohne Katalogauswahl ist das der
+  // Regelfall — gemeldet statt still ein Mass zu erfinden.
+  const zuschnittKonflikte = [];
+  for (const col of columns) for (const sg of col.segments) {
+    if (sg.zuschnitt_konflikt) {
+      zuschnittKonflikte.push({ k: col.k, z0_mm: sg.z0_mm, z1_mm: sg.z1_mm,
+        grund: sg.zuschnitt_konflikt, fertigmass_mm: sg.letzte_stange_mm });
+    }
+  }
+
+  // [Z-9] Segmente, an denen die feste Stangenfolge nicht passt und [Z-2] als Rueckfall gilt —
+  // sichtbar benannt (zum haendischen Nachpruefen), KEIN Baubarkeitsausschluss.
+  const schemaRueckfall = [];
+  for (const col of columns) for (const sg of col.segments) {
+    if (sg.stangenschema === "rueckfall") {
+      schemaRueckfall.push({ k: col.k, z0_mm: sg.z0_mm, z1_mm: sg.z1_mm, grund: sg.stangenschema_grund });
+    }
+  }
+
+  const buildable = invalidSegments.length === 0;  // strukturell; Versatz separat
+  return {
+    name, length_mm: lengthMm, height_mm: heightMm,
+    grid_mm: GRID, course_mm: COURSE, thickness_mm: THICK, rod_mm: ROD_,
+    N_grid: N, lagen: L,
+    // #136 Das Aktivierungs-Flag der Ausgleichslage reist am Wandelement mit — aber NUR, wenn es
+    // ausdruecklich gesetzt ist. Eine Wand ohne Ausgleichslage bekommt kein Feld, das es vorher
+    // nicht gab (dieselbe Bahn wie die Overrides im Vorspannblock).
+    ...(AUSGLEICH ? { ausgleichslage_aktiv: true } : {}),
+    openings: openings.map(op => op.asDict()),
+    steps: STEPS,
+    // [G-10] Verzahnungsbereiche (optional, nur die validen)
+    interlocks: IL.interlocks,
+    sides: normSides(sides),
+    prestress: PS,
+    base_plate: basePlate, top_plate: topPlate,
+    // [A-20]…[A-23] Frisch gerechnet bei JEDER Rechnung, nie eine gespeicherte Quelle.
+    ausgleichspunkte,
+    // [A-26] Ebenfalls frisch gerechnet bei JEDER Rechnung, nie eine gespeicherte Quelle.
+    deckenanschlusspunkte,
+    tension_columns: columns, bom,
+    validation: {
+      buildable, versatz_ok: versatzOk, versatz_violations: viol,
+      tension_span_ok: spanOk, rigid_lagen: rigidLagen, invalid_segments: invalidSegments,
+      zuschnitt_konflikte: zuschnittKonflikte,
+      // [A-11] Blechstoesse, die auf einem Steinstoss der untersten Lage liegen, ein leerer
+      // Vorratssatz sowie ein durch eine Aussparung entstandener, nach [A-29] unbaubarer
+      // Kurzbereich — sichtbare Meldung, KEIN Baubarkeitsausschluss.
+      blech_konflikte: bodenZerlegung.konflikte,
+      // [A-30] Abgewiesene manuelle Aussparungsfelder — benannt, verworfen, nie verschoben.
+      // Der Schluessel entsteht NUR im Fehlerfall.
+      ...(AS.fehler.length ? { aussparung_fehler: AS.fehler } : {}),
+      // [V-2] Steine ohne Spannachse. Auto-Pfad: immer leer. Manuelle Achsen: echter Befund.
+      ungehaltene_steine: ungehalteneSteine,
+      // [G-12] Ungueltige/fehlerhafte Verzahnungsbereiche (sichtbare Warnung, kein Baubarkeitsausschluss)
+      interlock_fehler: IL.fehler,
+      // [A-17] Abgewiesene manuelle Zwischenspannpunkte — benannt, nicht angewandt, nie gerundet.
+      // Der Schluessel entsteht NUR im Fehlerfall: eine Wand ohne Override soll kein Feld
+      // bekommen, das es vorher nicht gab (das gilt fuer die Auto-Ableitung ebenso).
+      ...(ZP.fehler.length ? { zwischenpunkt_fehler: ZP.fehler } : {}),
+      // [Z-9] Rueckfall der festen Stangenfolge — der Schluessel entsteht NUR im Befundfall.
+      ...(schemaRueckfall.length ? { stangenschema_rueckfall: schemaRueckfall } : {}),
+      // [A-24] Abgewiesene manuelle Ausgleichspunkte — benannt, nicht angewandt, nie gerundet.
+      // Der Schluessel entsteht auch hier NUR im Fehlerfall.
+      ...(AG.fehler.length ? { ausgleich_fehler: AG.fehler } : {}),
+      // [A-27] Abgewiesene manuelle Deckenanschlusspunkte — benannt, nicht angewandt, nie auf
+      // eine Nachbarachse geschoben. Der Schluessel entsteht auch hier NUR im Fehlerfall.
+      ...(DC.fehler.length ? { deckenanschluss_fehler: DC.fehler } : {}),
+      // [A-26] Unerfuellbare 1125-mm-Vorgabe im Auto-Pfad — die Spannachsen selbst liegen dort
+      // weiter auseinander. Benannt statt kaschiert; der Schluessel entsteht NUR im Fehlerfall.
+      ...(dcLuecken.length ? { deckenanschluss_luecken: dcLuecken } : {}),
+      // [A-26]/[A-27] Randfeld-Befunde (Feld 1 belegt / kein Anschluss in Feld 2–3) — in beiden
+      // Pfaden, benannt statt verschoben. Der Schluessel entsteht NUR im Befundfall.
+      ...(dcRand.length ? { deckenanschluss_rand: dcRand } : {}),
+      // [G-10] Nicht baubare Restbreiten durch Verzahnungsaussparung (z.B. 1 oder 4 Raster)
+      interlock_invalid_segments: interlockInvalidSegments,
+      // [G-18] Sonderzuschnitte der Ausgleichslage — je Steintyp ein Eintrag mit dem REALEN
+      // Mass, der Stueckzahl und dem Pruefhinweis im Wortlaut. Das ist eine sichtbare
+      // Meldung und KEIN Baubarkeitsausschluss: die Wand bleibt baubar, die Mengen bleiben
+      // unveraendert, und eine Mindesthoehe gibt es nicht ([G-17]). Der Schluessel entsteht
+      // NUR im Sonderfall — eine Wand ohne Ausgleichslage bekommt kein Feld, das es vorher
+      // nicht gab.
+      ...(ausgleichSonder.length ? { ausgleich_sonderzuschnitte: ausgleichSonder } : {}),
+    },
+    courses,
+  };
+}
+
+export const isBuildable = (w) => !!w.validation.buildable;
+
+export const REFERENCE_WALLS = {
+  ref1_glatte_wand: ["ref1_glatte_wand", 1000, 2000, []],
+  ref2_wand_tuer: ["ref2_wand_tuer", 2000, 2600, [new Opening(5, 11, 0, 10, "tuer")]],
+  ref3_wand_fenster: ["ref3_wand_fenster", 2000, 2600, [new Opening(6, 10, 4, 10, "fenster")]],
+};
+// Die Referenzwaende sind ausdrueckliche KOPFBLECH-Faelle: ihre goldenen Fixtures tragen
+// `top_connection: "blech"`. Der Wert wird hier AUSGESPROCHEN statt dem Default ueberlassen —
+// sonst verschoebe ein spaeterer Wechsel des allgemeinen Defaults die Goldwerte still.
+// Der Default in `normPrestress` bleibt davon unberuehrt.
+export function buildReference(key) {
+  const [name, l, h, ops] = REFERENCE_WALLS[key];
+  return buildWall(name, l, h, ops, null, { top_connection: "blech" });
+}

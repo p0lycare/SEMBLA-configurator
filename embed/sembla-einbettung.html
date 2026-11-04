@@ -1,0 +1,57 @@
+<!--
+  SEMBLA®-Konfigurator – Einbettung für www.sembla.de/produkt (für die Agentur)
+
+  Diesen Block an der gewünschten Stelle der Seite einfügen. Er
+    1. bettet den Konfigurator per iframe ein,
+    2. passt die iframe-Höhe automatisch an (kein zweiter Scrollbalken),
+    3. öffnet bei „Ihr Fassadensystem fehlt? Jetzt anfragen“ das Projektformular von sembla.de,
+    4. reicht Nutzungsereignisse an den Google Tag Manager weiter (dataLayer); der Consent wird dort geregelt.
+
+  Adresse: https://konfigurator.sembla.de (seit 03.11.2026; die alte github.io-Adresse leitet dorthin weiter).
+
+  Cookiebot: data-cookieconsent="ignore" ist nötig, sonst blockiert das automatische Blockieren den iframe.
+  Der Konfigurator setzt selbst keine Cookies und trackt nichts; Terminbuchung und Datenblatt-Anfrage laufen
+  innerhalb des iframes (HubSpot).
+
+  Nachrichten vom Konfigurator (window.postMessage, nur von der Konfigurator-Adresse angenommen):
+    { typ: "sembla-konfigurator:hoehe",    hoehe: 2140 }
+    { typ: "sembla-konfigurator:formular", anlass: "fassadensystem", zusammenfassung: "Wand 6,00 × 2,85 m · …" }
+    { typ: "sembla-konfigurator:ereignis", name, daten }
+      name: fassade_gewaehlt | innen_gewaehlt | oeffnung | info | stueckliste_csv | rueckbau_angesehen
+            | cta (daten.anlass: termin | fassadensystem) | datenblatt_angefordert
+-->
+<div id="sembla-konfigurator">
+  <iframe
+    src="https://konfigurator.sembla.de/?compact=1"
+    title="SEMBLA® Konfigurator"
+    data-cookieconsent="ignore"
+    loading="lazy"
+    style="display:block;width:100%;height:2200px;border:0">
+  </iframe>
+</div>
+<script data-cookieconsent="ignore">
+(function () {
+  var frame = document.querySelector("#sembla-konfigurator iframe");
+  var herkunft = new URL(frame.src, location.href).origin;
+
+  function formularOeffnen(anlass, zusammenfassung) {
+    // Agentur: das Projektformular öffnen und `zusammenfassung` in ein (verstecktes) Feld schreiben,
+    // damit das Planungsteam die Wand sieht. Vorläufig wird der Button „Jetzt Projekt starten“ ausgelöst.
+    var knopf = Array.prototype.find.call(document.querySelectorAll("button, a"), function (b) {
+      return /Projekt starten/i.test(b.textContent);
+    });
+    if (knopf) knopf.click();
+  }
+
+  window.addEventListener("message", function (e) {
+    if (e.origin !== herkunft || e.source !== frame.contentWindow) return;
+    var d = e.data;
+    if (!d || typeof d.typ !== "string") return;
+    if (d.typ === "sembla-konfigurator:hoehe" && d.hoehe > 0) frame.style.height = Math.ceil(d.hoehe) + "px";
+    else if (d.typ === "sembla-konfigurator:formular") formularOeffnen(d.anlass, d.zusammenfassung);
+    else if (d.typ === "sembla-konfigurator:ereignis") {
+      if (window.dataLayer) window.dataLayer.push({ event: "sembla_konfigurator", aktion: d.name, daten: d.daten });
+    }
+  });
+})();
+</script>

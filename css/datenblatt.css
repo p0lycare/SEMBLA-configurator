@@ -1,0 +1,26 @@
+/* Datenblatt: am Bildschirm wie der Konfigurator, im Druck A4 hoch ohne Bedienelemente. */
+.blatt { max-width: 960px; gap: 36px; }
+.blatt-kopf { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; }
+.blatt-kopf .logo { margin: 0; }
+.aktionen { display: flex; align-items: center; flex-wrap: wrap; gap: 16px; }
+.seite { display: grid; gap: 14px; }
+.blatt h1 { font-size: clamp(28px, 5vw, 44px); }
+.blatt h2 { margin: 0; font-size: 22px; }
+.blatt .lead { font-size: 16px; }
+.blatt footer { border-top: 1px solid var(--linie); padding-top: 12px; display: grid; gap: 4px; }
+.blatt footer a { color: inherit; }
+
+.download-knoepfe { display: flex; flex-wrap: wrap; gap: 10px; }
+
+@page { size: A4; margin: 14mm 12mm; }
+@media print {
+  body { font-size: 11pt; }
+  .app.blatt { padding: 0; max-width: none; gap: 18px; }
+  .aktionen, .downloads { display: none; }
+  .seite { break-inside: auto; }
+  .seite.regeln, .seite.waerme { break-before: page; }
+  .kachel, .teil, tr, .teilgruppe h3 { break-inside: avoid; }
+  .kachel .wert { font-size: 18pt; }
+  .teil { background: #F4F4F2 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .zeichnung svg { max-height: 120mm; }
+}

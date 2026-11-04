@@ -1,0 +1,434 @@
+// @ts-check
+/**
+ * SEMBLA Aufbau — horizontaler Wandaufbau (Verbinder-/Lattenplanung), rein.
+ *
+ * DOM-freie Betriebskopie der Layout-Logik aus Modul 2 (`wandaufbau.html`).
+ * Nimmt das Wandelement (Single Source of Truth) plus die Aufbau-Eingaben
+ * (`eingaben.aufbau`, siehe storage.js) und liefert das Verbinder-Layout,
+ * den Latten-Zuschnitt und die Nachweis-Auslastung.
+ *
+ * Eigene Datei (shared/-Regel b): mehrere Nutzer (Modul 2 fuer die Zeichnung,
+ * Modul 4 Stueckliste und der zentrale Export fuer Verbinder-/Lattenmengen) und
+ * eigene Tests. Damit rechnen alle aus DEMSELBEN Datenmodell — kein Bundle,
+ * kein Drift.
+ *
+ * Einheiten: Wandelement in mm; hier durchgaengig cm (wie in Modul 2).
+ * ES-Modul: laeuft im Browser und in den Node-Tests per import.
+ */
+
+const NUTS = 12.5;          // Nutenraster (cm)
+// #136: die feste Lagenhoehe 20 cm ist hier ersatzlos entfallen — jede Lagenhoehe, -mitte und
+// -oberkante kommt aus den kanonischen Lagenkanten des Wandelements (s. u.).
+
+// ---------- Latten-Zuschnitt aus den ausgewaehlten Standardlaengen ([Z-2]/[Z-4]) ----------
+// Bei Latten ist die Stueckgrenze GEOMETRIE: sie folgt [U-8]/[U-12] (Stoss mittig zwischen
+// zwei Verbindern) — diese Baubarkeits-/Befestigungsregeln haben Vorrang vor der
+// Zuschnittoptimierung ([P-9]). Die ausgewaehlten Standardlaengen wirken daher als
+// OBERGRENZE (groesste gewaehlte Groesse) und als AUSGANGSPRODUKT je Stueck: jedes Stueck
+// wird aus der kleinsten geeigneten gewaehlten Groesse geschnitten. Trifft ein Stueck genau
+// eine Standardlaenge, ist es ein Standardteil, sonst ein sichtbar gekennzeichneter
+// Sonderzuschnitt. Keine Saegefuge, keine Reststueck-Wiederverwendung, keine Einkaufs-/
+// Verschnittoptimierung — es gibt darum bewusst KEIN Bin-Packing mehr.
+import { quelleFuerMass, normLaengen, MIN_FERTIGMASS_MM, wandLagenKanten } from "./sembla-core.js";
+
+// ---------- Kanonische Lagen (#136) ----------
+// Jede Lagenhoehe, Lagenmitte und Lagenoberkante dieses Moduls kommt aus den Lagenkanten des
+// FERTIGEN Wandelements. `Lagenindex x COURSE` ist ersatzlos entfallen: mit einer oberen
+// Ausgleichslage waere das eine ERFUNDENE Hoehe ([D-4]/[P-9]). Fuer eine reine 200-mm-Wand
+// liefert die Kantenliste genau dieselben Werte wie bisher.
+//
+// [U-13] Die Ausgleichslage traegt KEINE Verbinder. Sie ist ein Sonderzuschnitt mit
+// abweichender Steinhoehe; wo in ihr eine Nut laege, ist konstruktiv nicht nachgewiesen. Es
+// wird darum weder eine Nut- noch eine Verbinderposition in ihr angenommen — die Latten enden
+// an der letzten regulaeren Lage, und die fehlende Eignung wird ueber die bestehenden
+// Nut-Warnungen SICHTBAR gemeldet statt still uebergangen.
+const _lagenCache = new WeakMap();   // je Wandelement einmal deuten (reiner Lesecache)
+/** Kanonische Lagen in cm: {lage, u, o, h, mitte, ausgleich, stones}. */
+function lagenCm(w) {
+  if (w && typeof w === "object" && _lagenCache.has(w)) return _lagenCache.get(w);
+  const L = _lagenCm(w);
+  if (w && typeof w === "object") _lagenCache.set(w, L);
+  return L;
+}
+function _lagenCm(w) {
+  const K = wandLagenKanten(w);
+  const cs = (w && Array.isArray(w.courses)) ? w.courses : [];
+  return K.map((k, i) => {
+    const c = cs[i] && cs[i].lage === k.lage ? cs[i] : cs.find((x) => x && x.lage === k.lage);
+    return { lage: k.lage, u: k.unterkante_mm / 10, o: k.oberkante_mm / 10, h: k.hoehe_mm / 10,
+      mitte: +(((k.unterkante_mm + k.oberkante_mm) / 2) / 10).toFixed(2),
+      ausgleich: !!(c && c.ausgleich === true), stones: (c && c.stones) || [] };
+  });
+}
+const _verbCache = new WeakMap();
+/** Lagen, in denen ein Verbinder ueberhaupt sitzen darf (ohne Ausgleichslage, [U-13]). */
+function verbinderLagen(w) {
+  if (w && typeof w === "object" && _verbCache.has(w)) return _verbCache.get(w);
+  const L = lagenCm(w).filter((c) => !c.ausgleich);
+  if (w && typeof w === "object") _verbCache.set(w, L);
+  return L;
+}
+/** Die eine Ausgleichslage des Wandelements (oder `null`). */
+function ausgleichLage(w) { return lagenCm(w).find((c) => c.ausgleich) || null; }
+
+/** Ausgangsprodukt + Art eines geometrisch bestimmten Lattenstuecks (cm). */
+function stueckQuelle(lenCm, laengenCm) {
+  const q = quelleFuerMass(lenCm, laengenCm);
+  if (q == null) return { quelle_cm: null, art: "konflikt" };
+  return { quelle_cm: q, art: Math.abs(q - lenCm) < 1e-6 ? "standard" : "sonder" };
+}
+function splitInterval(S, E, conns, stock) {
+  const segs = []; if (E - S <= stock + 1e-6) { segs.push({ y0: S, y1: E }); return segs; }
+  let start = S, i = 0, guard = 0;
+  while (guard++ < 10000) {
+    if (E - start <= stock + 1e-6) { segs.push({ y0: start, y1: E }); break; }
+    let chosen = -1;
+    for (let j = i; j < conns.length - 1; j++) { const joint = (conns[j] + conns[j + 1]) / 2; if (joint - start <= stock + 1e-6) chosen = j; else break; }
+    let joint; if (chosen < 0) joint = +(start + stock).toFixed(3); else joint = +((conns[chosen] + conns[chosen + 1]) / 2).toFixed(3);
+    segs.push({ y0: start, y1: joint }); start = joint; while (i < conns.length && conns[i] < joint) i++;
+  }
+  return segs;
+}
+function solidIntervals(x, ops, H) {
+  const blocks = (ops || []).filter(o => x > o.x0 + 1e-6 && x < o.x1 - 1e-6).map(o => [o.y0, o.y1]).sort((a, b) => a[0] - b[0]);
+  const iv = []; let cur = 0;
+  for (const [a, b] of blocks) { if (a > cur + 1e-6) iv.push([cur, a]); cur = Math.max(cur, b); }
+  if (H - cur > 1e-6) iv.push([cur, H]);
+  return iv;
+}
+
+/**
+ * Latten je Verbinderachse. Stueckgrenzen aus der Geometrie ([U-8]/[U-12]), Ausgangsprodukt
+ * je Stueck aus den ausgewaehlten Standardlaengen ([Z-2]/[Z-4]). Daemmung entfaellt (MVP).
+ * @param {object} layout Verbinder-Layout (points/openings_cm/wall)
+ * @param {object} [opts] { laengenCm:number[], stockCm, clipY:[lo,hi], axisTop:(x)=>hi }
+ */
+export function layoutToBattens(layout, opts = {}) {
+  // Obergrenze = groesste ausgewaehlte Standardlaenge; ohne Auswahl der kompatible Altwert.
+  const laengen = normLaengen(opts.laengenCm && opts.laengenCm.length ? opts.laengenCm : [opts.stockCm ?? 150]);
+  const stock = laengen[0];
+  const H = (layout.wall && layout.wall.H_cm) || 0, ops = layout.openings_cm || [];
+  const cy = opts.clipY || [0, H];
+  const at = opts.axisTop || (() => H);
+  const clip = (iv, x) => iv.map(([S, E]) => [Math.max(S, cy[0]), Math.min(E, cy[1], at(x))]).filter(([S, E]) => E - S > 1e-6);
+  const byX = new Map();
+  for (const p of layout.points || []) { const k = +(+p.x_cm).toFixed(2); if (!byX.has(k)) byX.set(k, new Set()); byX.get(k).add(+(+p.y_cm).toFixed(2)); }
+  const axes = [], pieces = []; let warnings = 0;
+  const quellMap = new Map();                 // Ausgangsprodukt -> Anzahl Zuschnitte
+  let standardStuecke = 0, sonderStuecke = 0;
+  const kurzStuecke = [], ohneQuelle = [];    // [Z-5] / kein geeignetes Ausgangsprodukt
+  for (const x of [...byX.keys()].sort((a, b) => a - b)) {
+    const ys = [...byX.get(x)].sort((a, b) => a - b); const intervals = clip(solidIntervals(x, ops, H), x); const segs = [];
+    for (const [S, E] of intervals) {
+      const conns = ys.filter(y => y > S + 1e-6 && y < E - 1e-6); if (conns.length === 0) { warnings++; continue; }
+      for (const sg of splitInterval(S, E, conns, stock)) {
+        const len = +(sg.y1 - sg.y0).toFixed(2);
+        const q = stueckQuelle(len, laengen);
+        // Keine Reststueck-Wiederverwendung: je Zuschnitt genau ein Ausgangsprodukt.
+        if (q.quelle_cm != null) {
+          quellMap.set(q.quelle_cm, (quellMap.get(q.quelle_cm) || 0) + 1);
+          if (q.art === "standard") standardStuecke++; else sonderStuecke++;
+        } else ohneQuelle.push({ x_cm: x, len_cm: len });
+        if (len < MIN_FERTIGMASS_MM / 10 - 1e-6) kurzStuecke.push({ x_cm: x, len_cm: len });
+        segs.push({ y0_cm: +sg.y0.toFixed(2), y1_cm: +sg.y1.toFixed(2), len_cm: len,
+                    quelle_cm: q.quelle_cm, art: q.art });
+        pieces.push(len);
+      }
+    }
+    axes.push({ x_cm: x, n_connectors: ys.length, segments: segs });
+  }
+  const gesamt = pieces.reduce((a, b) => a + b, 0);
+  const ausgang = [...quellMap.entries()].map(([laenge_cm, anzahl]) => ({ laenge_cm, anzahl }))
+    .sort((a, b) => b.laenge_cm - a.laenge_cm);
+  const summary = {
+    achsen: axes.length, latten_stuecke: pieces.length,
+    standard_stuecke: standardStuecke, sonder_stuecke: sonderStuecke,
+    gesamtlaenge_m: +(gesamt / 100).toFixed(2),
+    laengen_cm: laengen, ausgang, warnungen: warnings,
+    kurz_stuecke: kurzStuecke, ohne_quelle: ohneQuelle,
+  };
+  return { wall: layout.wall || {}, openings_cm: ops, axes, summary, laengen_cm: laengen };
+}
+
+// ---------- Achsen aus Panelfugen + Zwischenachsen ----------
+function axesRange(lo_cm, hi_cm, panel_cm, off_cm, max_cm, edges_cm) {
+  if (hi_cm - lo_cm < 0.01) return [lo_cm];
+  const set = new Set([+lo_cm.toFixed(2), +hi_cm.toFixed(2)]);
+  for (const e of (edges_cm || [])) if (e > lo_cm - 1e-6 && e < hi_cm + 1e-6) set.add(+e.toFixed(2));
+  for (let k = 0; ; k++) { const x = off_cm + k * panel_cm; if (x > hi_cm + 1e-6) break; if (x > lo_cm - 1e-6) set.add(+x.toFixed(2)); }
+  let arr = [...set].sort((a, b) => a - b);
+  const out = [arr[0]];
+  for (let i = 1; i < arr.length; i++) { const gap = arr[i] - arr[i - 1]; if (gap > max_cm + 1e-6) { const n = Math.ceil(gap / max_cm); for (let j = 1; j < n; j++) out.push(+(arr[i - 1] + gap * j / n).toFixed(2)); } out.push(arr[i]); }
+  return [...new Set(out.map(x => +x.toFixed(2)))].sort((a, b) => a - b);
+}
+
+// ---------- Nutenraster (Verbinder in Steinmitte) ----------
+function snapCourses(w, ys, lo, hi) {
+  // Kandidaten sind die REALEN Lagenmitten (ohne Ausgleichslage, [U-13]) — fuer eine reine
+  // 200-mm-Wand exakt die bisherige Reihe 10/30/50/… cm.
+  const alle = verbinderLagen(w).map(c => c.mitte);
+  const mids = alle.filter(s => s >= lo - 1e-6 && s <= hi + 1e-6);
+  if (!mids.length) {
+    if (!alle.length) return [];                       // keine Lagengeometrie -> keine Reihe erfinden
+    const z = (lo + hi) / 2;
+    mids.push(alle.reduce((b, c) => Math.abs(c - z) < Math.abs(b - z) - 1e-9 ? c : b, alle[0]));
+  }
+  const near = y => mids.reduce((b, c) => Math.abs(c - y) < Math.abs(b - y) - 1e-9 ? c : b, mids[0]);
+  const seen = new Set(), out = [];
+  for (const y of ys) { const s = near(y); const k = s.toFixed(2); if (!seen.has(k)) { seen.add(k); out.push(s); } }
+  return out.sort((a, b) => a - b);
+}
+const snapNut = x => +(Math.round(x / NUTS) * NUTS).toFixed(2);
+
+// ---------- [U-11] Lagenweise Nutpruefung (Muss-Regel) ----------
+// Ein Verbinder ist nur dort moeglich, wo in GENAU DIESER Lage ein Stein liegt, der die Nut
+// strikt innen fuehrt. Damit sind Stein-Aussenkanten (auch die vertikalen Kanten einer
+// Staffelung/Treppe), Stossfugen und steinfreie Bereiche ausgeschlossen. `nutStatus` klassifiziert
+// nur wandglobal ("stagger" = lagenweise gemischt) und genuegt dafuer nicht.
+// Sicherheit hat Vorrang: es gibt keinen Ersatzpunkt und keinen Fallback — fehlt die
+// Lagengeometrie (`w.courses`), entstehen keine Punkte, der Zustand wird gemeldet.
+function nutFrei(c, xcm) {
+  const xmm = xcm * 10;
+  return ((c && c.stones) || []).some(st => xmm > st.x0 + 1e-6 && xmm < st.x1 - 1e-6);
+}
+/** Lage (ohne Ausgleichslage), in der die Hoehe y liegt — aus den kanonischen Kanten gelesen. */
+function lageBei(w, ycm) {
+  // Strikt INNERHALB der Lage: eine Hoehe genau auf einer Lagenfuge gehoert keiner Lage und
+  // bekommt keine geratene Zuordnung ([P-9]). Die Kandidaten sind ohnehin Lagenmitten.
+  return verbinderLagen(w).find(c => ycm > c.u + 1e-6 && ycm < c.o - 1e-6) || null;
+}
+function nutInLage(w, xcm, ycm) {
+  const cs = (w && w.courses) || null;
+  if (!cs || !cs.length) return false;
+  return nutFrei(lageBei(w, ycm), xcm);
+}
+/** Oberkante der hoechsten Lage, die die Nut x strikt innen fuehrt (cm; 0 = keine). [U-8]/[U-11] */
+function nutTop(w, xcm) {
+  let top = 0;
+  for (const c of verbinderLagen(w)) if (nutFrei(c, xcm)) top = Math.max(top, c.o);
+  return +top.toFixed(2);
+}
+/**
+ * Oberkante der hoechsten Lage, in der an x ueberhaupt Material liegt (Kante eingeschlossen).
+ * Bezugsgroesse fuer die Warnung: bis hierher waere ein Verbinder erwartbar, fehlt dort die
+ * innenliegende Nut, ist die Achse ausgeduennt. Oberhalb ist planmaessig kein Verbinder.
+ */
+function konturTop(w, xcm) {
+  const xmm = xcm * 10; let top = 0;
+  // Hier zaehlt die Ausgleichslage MIT: dort liegt Material, nur keine nutzbare Nut. Genau
+  // dieser Unterschied zu `nutTop` macht die fehlende Eignung als Warnung sichtbar.
+  for (const c of lagenCm(w))
+    if ((c.stones || []).some(st => xmm >= st.x0 - 1e-6 && xmm <= st.x1 + 1e-6)) top = Math.max(top, c.o);
+  return +top.toFixed(2);
+}
+function nutStatus(w, xcm) {
+  const xmm = xcm * 10; let cov = 0, inter = 0;
+  for (const c of verbinderLagen(w)) {
+    let isCov = false, isInt = false;
+    for (const st of c.stones) { if (xmm >= st.x0 - 1e-6 && xmm <= st.x1 + 1e-6) { isCov = true; if (xmm > st.x0 + 1e-6 && xmm < st.x1 - 1e-6) isInt = true; } }
+    if (isCov) { cov++; if (isInt) inter++; }
+  }
+  if (cov === 0) return "none";
+  if (inter === cov) return "cont"; if (inter === 0) return "joint"; return "stagger";
+}
+function nutAxes(lo, hi, panel, off, max, edges, B, w, ops, clr) {
+  const grid = []; for (let x = NUTS; x <= B - NUTS + 1e-6; x += NUTS) if (x >= lo - 1e-6 && x <= hi + 1e-6) grid.push(+x.toFixed(2));
+  // Sperrzone an den seitlichen Oeffnungslaibungen: dort ist der Stein geschnitten, die Nut
+  // also durchtrennt. Mindestabstand ist der bestehende "max. Randueberstand" (clr) — keine
+  // eigene Eingabe. Nur linke/rechte Kante (keine Sturzregel); die Achse ist global, gilt also
+  // ueber die ganze Wandhoehe. Sicherheit hat Vorrang: es gibt KEINEN Fallback, der eine Achse
+  // innerhalb der Sperrzone zulaesst — im Konflikt bleibt die Achsenmenge lieber leer/luecken-
+  // behaftet, was ueber die abgeleiteten Warnungen (ohWarn/xGapWarn) sichtbar wird.
+  const kanten = clr > 0 ? (ops || []).flatMap(o => [o.x0, o.x1]) : [];
+  const frei = x => kanten.every(e => Math.abs(x - e) > clr - 1e-6);
+  // Richtung "von der Oeffnung weg" (nur als Tie-Break bei gleich weiten Kandidaten):
+  // an der linken Laibung nach links, an der rechten nach rechts.
+  const wegDir = x => {
+    let best = null, bd = Infinity;
+    for (const o of (ops || [])) {
+      if (Math.abs(x - o.x0) < bd) { bd = Math.abs(x - o.x0); best = -1; }
+      if (Math.abs(x - o.x1) < bd) { bd = Math.abs(x - o.x1); best = +1; }
+    }
+    return kanten.length ? best : 0;
+  };
+  if (!grid.length) { const c = snapNut((lo + hi) / 2); return frei(c) ? [c] : []; }
+  const interior = grid.filter(x => { const st = nutStatus(w, x); return st === "cont" || st === "stagger"; });
+  const usable = (interior.length ? interior : grid).filter(frei);
+  if (!usable.length) return [];
+  const near = x => {
+    const dir = wegDir(x);
+    return usable.reduce((b, c) => {
+      const dc = Math.abs(c - x), db = Math.abs(b - x);
+      if (dc < db - 1e-9) return c;
+      if (dc > db + 1e-9) return b;
+      return (dir && (c - x) * dir > (b - x) * dir + 1e-9) ? c : b;   // gleich weit -> von der Oeffnung weg
+    }, usable[0]);
+  };
+  const L = usable[0], R = usable[usable.length - 1]; const set = new Set([L, R]);
+  for (let k = 0; ; k++) { const x = off + k * panel; if (x > hi + 1e-6) break; if (x > lo - 1e-6) set.add(near(x)); }
+  for (const e of (edges || [])) if (e > lo - 1e-6 && e < hi + 1e-6) set.add(near(e));
+  let arr = [...set].sort((a, b) => a - b);
+  const out = [arr[0]];
+  for (let i = 1; i < arr.length; i++) {
+    const gap = arr[i] - arr[i - 1];
+    if (gap > max + 1e-6) { const n = Math.ceil(gap / max); for (let j = 1; j < n; j++) { const t = near(arr[i - 1] + gap * j / n); if (t > arr[i - 1] + 1e-6 && t < arr[i] - 1e-6) out.push(t); } }
+    out.push(arr[i]);
+  }
+  return [...new Set(out)].sort((a, b) => a - b);
+}
+
+// ---------- Verbinder-Katalog (Rk/gM je Funktion) ----------
+export const VERBINDER_KATALOG = [
+  { id: "FA-1", name: "Fassadenanker FA-1", Rk: 0.50, gM: 2.0, fuer: "fassade" },
+  { id: "FA-2", name: "Fassadenanker FA-2 (schwer)", Rk: 0.80, gM: 2.0, fuer: "fassade" },
+  { id: "IA-1", name: "Innenanker IA-1 (leicht)", Rk: 0.25, gM: 2.0, fuer: "innenausbau" },
+  { id: "UNI", name: "Universal", Rk: 0.50, gM: 2.0, fuer: "alle" },
+];
+
+/**
+ * Vollstaendige Aufbau-Berechnung aus Wandelement + Aufbau-Eingaben.
+ * @param {object} w Wandelement (Single Source of Truth)
+ * @param {object} a Aufbau-Eingaben (eingaben.aufbau; siehe storage.standardEingaben)
+ * @param {object} [spec] Produktspezifikation aus dem Katalog ([Z-1]):
+ *   `{ laengen_mm:number[], breite_mm:number|null }` der gewaehlten Lattenprodukte.
+ *   Ist sie gesetzt, ist sie die ALLEINIGE Quelle der Standardlaengen — `a.latten.stange_cm`
+ *   wird dann nicht mehr gelesen. Fehlt sie, gilt der kompatible Altwert.
+ * @returns {object} { B,H, feld, xs, ys, pts, nutRaster, layout, batt, auslastung }
+ */
+export function berechneAufbau(w, a, spec = null) {
+  const panel = a.panel || {}, achsen = a.achsen || {}, verb = a.verbinder || {}, latten = a.latten || {};
+  const seite = a.seite || "vorne";
+  const B = w.length_mm / 10, H = w.height_mm / 10;   // cm
+  // Oeffnungshoehen kommen aus den kanonischen Lagenkanten (`Lagenindex x 20 cm` waere mit
+  // oberer Ausgleichslage erfunden); fuer eine reine 200-mm-Wand wertgleich zu vorher.
+  const LC = lagenCm(w);
+  const OKcm = n => (n > 0 && LC.length) ? LC[Math.min(n, LC.length) - 1].o : 0;
+  const ops = (w.openings || []).map(o => ({ x0: o.g0 * 12.5, x1: o.g1 * 12.5, y0: OKcm(o.l0), y1: OKcm(o.l1), art: o.art }));
+  const ovl = (a0, a1, b0, b1) => Math.max(0, Math.min(a1, b1) - Math.max(a0, b0));
+  const F = a.feld_cm || null;
+  const fx0 = F ? Math.max(0, F.x0) : 0, fx1 = F ? Math.min(B, F.x1) : B;
+  const fy0 = F ? Math.max(0, F.y0) : 0, fy1 = F ? Math.min(H, F.y1) : H;
+  const relSteps = (w.steps || []).filter(st => (st.height_mm / 10) < fy1 - 1e-6 && ovl(st.x0_mm / 10, st.x1_mm / 10, fx0, fx1) > 1e-6);
+  const steps = relSteps.map(st => ({ x0: st.x0_mm / 10 - 0.1, x1: st.x1_mm / 10, y0: st.height_mm / 10, y1: H, art: "_step" }));
+  const opsEff = ops.concat(steps);
+  const localTop = x => { for (const st of relSteps) { const A = st.x0_mm / 10, Bx = st.x1_mm / 10; if (x >= A - 1e-6 && x < Bx - 1e-6) return st.height_mm / 10; } return H; };
+  // Obergrenze einer Achse = letzte Lage, die die Nut x strikt innen fuehrt ([U-11]). Fruehere
+  // Variante zog die Achse an einer Stufenkante auf die hoehere Nachbar-Oberkante hoch — dort ist
+  // x aber die Wand-Aussenkante. Latten enden damit an der letzten tragbaren Lage ([U-8]).
+  const axisTop = x => nutTop(w, x);
+  const xEdges = []; ops.forEach(o => { xEdges.push(o.x0, o.x1); }); relSteps.forEach(st => { xEdges.push(st.x0_mm / 10, st.x1_mm / 10); });
+  const yEdges = []; ops.forEach(o => { if (o.y0 > 0) yEdges.push(o.y0); if (o.y1 < H) yEdges.push(o.y1); }); relSteps.forEach(st => { const t = st.height_mm / 10; if (t > 0 && t < H) yEdges.push(t); });
+  const pB = +panel.b_cm || 62.5, pH = +panel.h_cm || 150, oX = +panel.off_x_cm || 0, oY = +panel.off_y_cm || 0;
+  const maxOh = +achsen.ohang_cm || 12.5, maxX = +achsen.max_x_cm || 62.5;
+  const xs = nutAxes(fx0, fx1, pB, oX, maxX, xEdges, B, w, ops, maxOh);
+  const ys = snapCourses(w, axesRange(fy0, fy1, pH, oY, +achsen.max_y_cm || 75, yEdges), fy0, fy1);
+  // Abgeleitete Warnungen (nie gespeichert): Randueberstand wie bisher, dazu der X-Abstand.
+  // Laesst die Sperrzone keine sichere Achse zu, bleibt die Luecke bestehen und wird gemeldet —
+  // statt sie mit einem Verbinder auf durchtrennter Nut zu kaschieren.
+  const ohL = xs.length ? +(xs[0] - fx0).toFixed(2) : null, ohR = xs.length ? +(fx1 - xs[xs.length - 1]).toFixed(2) : null;
+  const ohWarn = ohL != null && (ohL > maxOh + 1e-6 || ohR > maxOh + 1e-6);
+  let xGapMax = 0; for (let i = 1; i < xs.length; i++) xGapMax = Math.max(xGapMax, xs[i] - xs[i - 1]);
+  xGapMax = +xGapMax.toFixed(2);
+  const xGapWarn = xs.length === 0 || xGapMax > maxX + 1e-6;
+  const inOpen = (x, y) => ops.some(o => x > o.x0 + 1e-6 && x < o.x1 - 1e-6 && y > o.y0 + 1e-6 && y < o.y1 - 1e-6);
+  const stat = x => nutStatus(w, x);
+  // Punktweise Pruefung nach [U-11]: oberhalb der tragenden Geometrie und in Oeffnungen ist
+  // planmaessig kein Verbinder (keine Warnung). Eine Position, die innerhalb der tragenden Lagen
+  // auf einer Stossfuge/Kante liegt, wird verworfen und als ausgeduennte Achse gemeldet.
+  const pts = []; let nutBlocked = 0; const thin = new Set();
+  for (const x of xs) {
+    const t = stat(x) === "cont" ? "C" : "I", kTop = konturTop(w, x);
+    for (const y of ys) {
+      if (inOpen(x, y)) continue;
+      if (nutInLage(w, x, y)) { pts.push({ x_cm: x, nut_cm: x, y_cm: y, type: t }); continue; }
+      if (y <= kTop + 1e-6) { nutBlocked++; thin.add(x); }   // Material vorhanden, aber keine Nut
+    }
+  }
+  // ---------- [U-12] Endverbinder je realem Lattensegment (MUSS, unter [U-11]) ----------
+  // Das globale Kreuzraster xs × ys sichert einen Verbinder nur an Wandfuss/Wandkrone, nicht an den
+  // Enden der TATSAECHLICHEN Lattensegmente (Issue #30: ueber einer Tuer blieb nur der obere
+  // Verbinder, weil das untere Lattenende die Tuer-Oberkante ist, das Raster aber vom Wandfuss aus
+  // gebildet wird). Jedes reale Segment bekommt daher zusaetzlich seine erste und letzte zulaessige
+  // Lage. Die Segmente entstehen aus GENAU derselben Quelle wie in layoutToBattens
+  // (solidIntervals + Clip auf [fy0, fy1] und axisTop) — kein zweites Modell, kein Drift; fiktive
+  // Stuecke durch eine Oeffnung entstehen dadurch nicht.
+  // Scope ([U-12.1]): je SEGMENT, nicht je physischem Zuschnittstueck — dafuer bleibt [U-8]
+  // zustaendig (Stoss mittig zwischen zwei Verbindern).
+  // [U-11] hat Vorrang: Kandidaten sind ausschliesslich Steinmitten mit in GENAU dieser Lage
+  // innenliegender Nut. Gibt es im Segment keine, entsteht KEIN Ersatzpunkt — das Segment bleibt
+  // ungeplant (layoutToBattens zaehlt es als Warnung) und wird ueber nutEndLeerSegmente gemeldet.
+  const segLagen = (x, S, E) => {
+    const out = [];
+    for (const c of verbinderLagen(w)) { const y = c.mitte; if (y >= E - 1e-6) break; if (y > S + 1e-6 && nutInLage(w, x, y)) out.push(y); }
+    return out;
+  };
+  let nutEndZusatz = 0; const nutEndLeerSegmente = [];
+  for (const x of xs) {
+    const oben = Math.min(fy1, axisTop(x)), t = stat(x) === "cont" ? "C" : "I";
+    for (const [S0, E0] of solidIntervals(x, ops, H)) {
+      const S = Math.max(S0, fy0), E = Math.min(E0, oben);
+      if (E - S <= 1e-6) continue;                        // kein reales Segment auf dieser Achse
+      const cand = segLagen(x, S, E);
+      if (!cand.length) { nutEndLeerSegmente.push({ x_cm: x, y0_cm: +S.toFixed(2), y1_cm: +E.toFixed(2) }); continue; }
+      for (const y of [cand[0], cand[cand.length - 1]]) {   // ein Kandidat erfuellt beide Enden
+        if (pts.some(p => p.x_cm === x && Math.abs(p.y_cm - y) < 0.01)) continue;
+        pts.push({ x_cm: x, nut_cm: x, y_cm: y, type: t }); nutEndZusatz++;
+      }
+    }
+  }
+  pts.sort((a, b) => a.x_cm - b.x_cm || a.y_cm - b.y_cm);   // Reihenfolge bleibt deterministisch
+  const nutGeoWarn = !((w.courses || []).length);
+  const nutLeerAchsen = xs.filter(x => !pts.some(p => p.x_cm === x));
+  const nutThinAxes = [...thin].sort((a, b) => a - b);
+  // ---------- [U-13] Ausgleichslage: kein Verbinder, sichtbar gemeldet (#136) ----------
+  // Sie wird weder mit einer Nut- noch mit einer Verbinderposition belegt (s. o.). Damit das
+  // nicht still geschieht, steht die Lage mit ihrem REALEN Mass als eigener Befund im Ergebnis;
+  // der Wortlaut liegt hier, damit Modul 2 und jeder weitere Leser denselben Satz fuehren.
+  const _AG = ausgleichLage(w);
+  const _cm = (n) => (+n).toFixed(1).replace(".", ",");
+  const ausgleichAchsen = _AG
+    ? xs.filter(x => (_AG.stones || []).some(st => x * 10 >= st.x0 - 1e-6 && x * 10 <= st.x1 + 1e-6))
+    : [];
+  const ausgleichslage = _AG
+    ? { lage: _AG.lage, von_cm: _AG.u, bis_cm: _AG.o, hoehe_cm: +_AG.h.toFixed(2), achsen_cm: ausgleichAchsen }
+    : null;
+  const ausgleichMeldung = _AG
+    ? `obere Ausgleichslage ${_cm(_AG.u)}–${_cm(_AG.o)} cm (${_cm(_AG.h)} cm) ohne konstruktiv `
+      + `geeignete Verbinderposition — kein Verbinder angesetzt, Latten enden bei ${_cm(_AG.u)} cm`
+      + (ausgleichAchsen.length ? ` (betroffene Achsen ${ausgleichAchsen.map(_cm).join("/")} cm)` : "")
+    : null;
+  // `nutWarn` bleibt bewusst der Befund ueber NUTPOSITIONEN (sonst meldete eine Wand mit
+  // Ausgleichslage „0 Positionen entfallen"); die Ausgleichslage hat ihre eigene Meldung.
+  const nutWarn = nutGeoWarn || nutBlocked > 0 || nutLeerAchsen.length > 0 || nutEndLeerSegmente.length > 0;
+  const nutRaster = [];
+  for (let x = NUTS; x <= B - NUTS + 1e-6; x += NUTS) { const t = stat(+x.toFixed(2)); if (t === "cont" || t === "stagger") nutRaster.push({ x_cm: +x.toFixed(2), status: t }); }
+  const Rd = (+verb.Rk || 0.5) / (+verb.gM || 2.0);
+  const coeff = (+verb.gQ || 1.5) * (+verb.wk || 0.8);
+  let area = ((fx1 - fx0) / 100) * ((fy1 - fy0) / 100) - opsEff.reduce((s, o) => s + (ovl(o.x0, o.x1, fx0, fx1) / 100) * (ovl(o.y0, o.y1, fy0, fy1) / 100), 0);
+  area = Math.max(0.01, area);
+  const atReal = area / Math.max(1, pts.length); const util = coeff > 0 ? coeff * atReal / Rd : 0; const ok = util <= 1 + 1e-9;
+  const layout = {
+    format: "SEMBLA-VerbinderLayout", version: "2.0",
+    wall: { B_cm: B, H_cm: H, name: (w.name || null) }, openings_cm: ops,
+    uk: { sx_cm: null, sy_cm: null }, seite,
+    seite_funktion: (w.sides && w.sides[seite] && w.sides[seite].funktion) || null,
+    verbinder_typ: verb.typ || null, panel: { b_cm: pB, h_cm: pH },
+    feld_cm: F ? { x0: fx0, x1: fx1, y0: fy0, y1: fy1 } : null,
+    points: pts,
+  };
+  // [Z-1] Katalog schlaegt Altwert: nur ohne Produktauswahl wird `latten.stange_cm` gelesen.
+  const specL = (spec && Array.isArray(spec.laengen_mm)) ? spec.laengen_mm.map(mm => mm / 10) : [];
+  const lattenQuelle = specL.length ? "katalog" : "fallback";
+  const batt = layoutToBattens(layout, specL.length
+    ? { laengenCm: specL, clipY: [fy0, fy1], axisTop }
+    : { stockCm: +latten.stange_cm || 150, clipY: [fy0, fy1], axisTop });
+  const lattenBreiteCm = (spec && +spec.breite_mm > 0) ? +spec.breite_mm / 10 : (+latten.breite_cm || null);
+  return {
+    w, B, H, fx0, fx1, fy0, fy1, xs, ys, pts, nutRaster, steps, relSteps, localTop, axisTop,
+    lattenQuelle, lattenBreiteCm, lattenLaengenCm: batt.laengen_cm,
+    layout, batt, atReal, util, ok, ohL, ohR, maxOh, ohWarn, maxX, xGapMax, xGapWarn,
+    nutBlocked, nutThinAxes, nutLeerAchsen, nutGeoWarn, nutWarn,
+    nutEndZusatz, nutEndLeerSegmente,
+    ausgleichslage, ausgleichMeldung,
+  };
+}
