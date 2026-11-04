@@ -1,6 +1,7 @@
 // Oberfläche: Zustand, Bedienelemente, Kennzahlen, Regeln. Die Konfiguration steht in der URL
 // (?l=…&h=…), damit sich ein Stand teilen lässt.
 
+import { wirksameZwischenpunkte } from "./sembla-core.js";
 import { berechne, zusammenfassung, GRENZEN, OEFFNUNGEN, oeffnungsMasse, masseText } from "./wand.js";
 import { zeichne } from "./ansicht2d.js";
 import { eingebettet, hoeheMelden, formularOeffnen, ereignis } from "./einbettung.js";
@@ -179,6 +180,11 @@ $("tab2d").onclick = () => ansicht("2d");
 document.querySelectorAll("[data-blick]").forEach((b) => (b.onclick = () => modell?.blick(b.dataset.blick)));
 
 $("faechern").oninput = (e) => modell?.setze({ faechern: +e.target.value / 100 });
+$("gestuft").onclick = () => {
+  const an = $("gestuft").getAttribute("aria-pressed") !== "true";
+  $("gestuft").setAttribute("aria-pressed", String(an));
+  modell?.setze({ gestuft: an });
+};
 let rueckbauGemeldet = false;
 $("rueckbau").oninput = (e) => {
   const t = +e.target.value / 100;
@@ -186,6 +192,7 @@ $("rueckbau").oninput = (e) => {
   rueckbauText(t);
   if (t > 0.95 && !rueckbauGemeldet) { rueckbauGemeldet = true; ereignis("rueckbau_angesehen"); }
 };
+const zwischenpunkte = (w) => wirksameZwischenpunkte(w).length;
 function rueckbauText(t) {
   const k = ergebnis?.kennzahlen;
   const fass = A.fassaden.find((f) => f.id === zustand.fassade) || A.fassaden[0];
@@ -193,7 +200,7 @@ function rueckbauText(t) {
   if (t === 0) { schritt = ""; text = "Schieben Sie den Regler: So wird die Wand zerstörungsfrei zurückgebaut."; }
   else if (t < 0.36) { schritt = "Schritt 1 von 3"; text = `Ausbau lösen: ${fass.rueckbau || "Innenausbau an den Verbindern lösen."} Die Verbinder kommen aus den Nuten, die Steine bleiben unbeschädigt.`; }
   else if (t < 0.6) { schritt = "Schritt 2 von 3"; text = `Vorspannung lösen: Die Muttern werden geöffnet, ${k?.gewindestangen ?? ""} Gewindestangen werden aus den Kammern gezogen.`; }
-  else { schritt = "Schritt 3 von 3"; text = `Lage für Lage abheben: Alle ${k?.steine ?? ""} Steine lassen sich wieder einsetzen. Das Gebäude wird zum Bauteillager.`; }
+  else { schritt = "Schritt 3 von 3"; text = `Lage für Lage abheben${ergebnis && zwischenpunkte(ergebnis.w) ? `, die ${zwischenpunkte(ergebnis.w)} Einlegebleche der Zwischenspannpunkte kommen mit heraus` : ""}: Alle ${k?.steine ?? ""} Steine lassen sich wieder einsetzen. Das Gebäude wird zum Bauteillager.`; }
   $("rueckbauSchritt").textContent = schritt;
   $("rueckbauText").textContent = text;
 }

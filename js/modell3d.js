@@ -4,12 +4,17 @@
 
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { GRID, THICK, CHAMBER_OFFSET } from "./sembla-core.js";
+import { GRID, THICK, CHAMBER_OFFSET, wirksameZwischenpunkte } from "./sembla-core.js";
 import { schichtLagen } from "./wand.js";
 import { traglattenReihen } from "./aufbau-geometrie.js";
 
 const FASE = 3;          // Kantenrundung der vereinfachten Steine
 const NUT_B = 22, NUT_T = 10, KAMMER = 58;
+// Einlegeblech am Zwischenspannpunkt: Maße angenommen (in der Suite nicht hinterlegt), Oberkante
+// bündig mit der Lagenoberkante in der Vertiefung, Mutter darüber.
+const EINLEGEBLECH = { b: 100, d: 5 };
+// Gestufte Darstellung: jede Schicht endet um STUFE_MM früher als die darunterliegende.
+const STUFE_MM = 450;
 
 /** Vereinfachter Stein: Grundriss mit Kammern und Nuten, hochextrudiert, Kanten gefast. */
 function steinGeometrie(m) {
@@ -115,7 +120,7 @@ export function erstelle(canvas) {
 
   const welt = new THREE.Group(); scene.add(welt);
   let st = null;   // aktueller Szeneninhalt
-  let zustand = { rueckbau: 0, faechern: 0, ebenen: { steine: true, spann: true, verbinder: true, fassade: true, innen: true } };
+  let zustand = { rueckbau: 0, faechern: 0, gestuft: true, ebenen: { steine: true, spann: true, verbinder: true, fassade: true, innen: true } };
   let rahmen = 0;
 
   function render() { renderer.render(scene, cam); }
@@ -142,7 +147,9 @@ export function erstelle(canvas) {
     const gruppen = [];
     const zWelt = (z0, z1) => (seite > 0 ? [z0, z1] : [-THICK - z1, -THICK - z0]);
     let staenderBreite = 60;
-    for (const s of schichtLagen(aufbau.schichten)) {
+    const lagen = schichtLagen(aufbau.schichten);
+    const stufe = zustand.gestuft ? Math.min(STUFE_MM, (L * 0.5) / Math.max(1, lagen.length)) : 0;
+    for (const [idx, s] of lagen.entries()) {
       const [za, zb] = zWelt(s.z0, s.z1);
       const boxen = [];
       const flaeche = (x0, x1, y0, y1, extra = {}) =>
@@ -187,8 +194,11 @@ export function erstelle(canvas) {
           break;
         }
       }
+      // Gestuft: am rechten Wandende tritt jede Schicht hinter die nächstäußere zurück.
+      const xEnde = L - idx * stufe;
+      const sichtbar = stufe ? boxen.filter((b) => b.x0 < xEnde - 1).map((b) => (b.x1 > xEnde ? { ...b, x1: xEnde } : b)) : boxen;
       const g = new THREE.Group();
-      g.add(quader(boxen, mat(farben[s.material] || "#cccccc")));
+      g.add(quader(sichtbar, mat(farben[s.material] || "#cccccc")));
       g.userData = { seite, tiefe: s.z1, name: s.name };
       gruppen.push(g);
     }
@@ -229,6 +239,17 @@ export function erstelle(canvas) {
       platten.push({ x0: col.x_mm - 60, x1: col.x_mm + 60, y0: sg.z1_mm, y1: sg.z1_mm + 10, z0: -THICK / 2 - 60, z1: -THICK / 2 + 60 });
     }
     spann.add(quader(platten, stahl));
+    // Einlegebleche der Zwischenspannpunkte: liegen in der Lage und gehen beim Rückbau mit ihr.
+    const lageAn = (z) => w.courses.findIndex((c) => Math.abs(c.oberkante_mm - z) < 1);
+    const zp = wirksameZwischenpunkte(w).map((p) => ({ x: p.x_mm, y: p.z_mm, li: Math.max(0, lageAn(p.z_mm)) }));
+    const einlege = new THREE.Group();
+    const eb = EINLEGEBLECH.b / 2;
+    // Signalfarbe, damit die Bleche zwischen den abgehobenen Lagen auffallen.
+    const blechMat = mat(farben.einlegeblech || "#E0A100", { metalness: 0.3, roughness: 0.45 });
+    const blechM = quader(zp.map((p) => ({ x0: p.x - eb, x1: p.x + eb, y0: p.y - EINLEGEBLECH.d, y1: p.y, z0: -THICK / 2 - eb, z1: -THICK / 2 + eb })), blechMat);
+    const mutterM = quader(zp.map((p) => ({ x0: p.x - 9, x1: p.x + 9, y0: p.y, y1: p.y + 8, z0: -THICK / 2 - 9, z1: -THICK / 2 + 9 })), blechMat);
+    blechM.userData.liste = mutterM.userData.liste = zp;
+    einlege.add(blechM, mutterM);
     const boden = quader([{ x0: 0, x1: L, y0: -10, y1: 0, z0: -THICK, z1: 0 }], stahl);
     welt.add(boden);
 
@@ -246,13 +267,13 @@ export function erstelle(canvas) {
     // Boden
     const flur = new THREE.Mesh(new THREE.BoxGeometry(L + 3000, 40, 4000), mat("#E4E4DF", { roughness: 1 }));
     flur.position.set(L / 2, -30, -THICK / 2);
-    welt.add(steine, spann, verb, fGruppe, iGruppe, flur);
+    welt.add(steine, spann, einlege, verb, fGruppe, iGruppe, flur);
 
     // Ausbauschichten in Rückbau-Reihenfolge: außen zuerst die äußerste
     const reihenfolge = [...aussen, ...innenG].sort((a, b) => b.userData.tiefe - a.userData.tiefe);
 
     const neu = !st || st.L !== L || st.H !== H;
-    st = { L, H, lagen: w.courses.length, steinMeshes, spann, verb, fGruppe, iGruppe, aussen, innenG, reihenfolge };
+    st = { L, H, lagen: w.courses.length, steinMeshes, spann, einlege, einlegeBasis: [blechM, mutterM].map((m) => { const a = new THREE.Matrix4(); return [...Array(m.count).keys()].map((i) => { m.getMatrixAt(i, a); return a.clone(); }); }), verb, fGruppe, iGruppe, aussen, innenG, reihenfolge };
     anwenden();
     if (neu) blick("schraeg");
     anfordern();
@@ -288,10 +309,25 @@ export function erstelle(canvas) {
       });
       im.instanceMatrix.needsUpdate = true; im.visible = e.steine;
     }
+    // Einlegebleche heben mit ihrer Lage ab und schweben dabei sichtbar in der Fuge darüber; sie
+    // gehören zum Spannsystem, bleiben aber beim Ziehen der Stangen liegen.
+    const hub = new THREE.Matrix4();
+    st.einlege.children.forEach((im, j) => {
+      im.userData.liste.forEach((p, i) => {
+        hub.makeTranslation(0, pc * (p.li * 110 + 55), 0).multiply(st.einlegeBasis[j][i]);
+        im.setMatrixAt(i, hub);
+      });
+      im.instanceMatrix.needsUpdate = true;
+    });
+    st.einlege.visible = e.spann;
     anfordern();
   }
 
-  function setze(teil) { zustand = { ...zustand, ...teil, ebenen: { ...zustand.ebenen, ...(teil.ebenen || {}) } }; anwenden(); }
+  function setze(teil) {
+    const neuBauen = "gestuft" in teil && teil.gestuft !== zustand.gestuft;
+    zustand = { ...zustand, ...teil, ebenen: { ...zustand.ebenen, ...(teil.ebenen || {}) } };
+    if (neuBauen && letzterAufruf) aktualisiere(...letzterAufruf); else anwenden();
+  }
 
   function blick(name) {
     if (!st) return;
