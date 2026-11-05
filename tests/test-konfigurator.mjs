@@ -14,7 +14,7 @@ import { freieHoehen, nachweis } from "../js/verbinder.js";
 import { wandAlsDxf } from "../js/export-dxf.js";
 import { wandAlsLv, lvDaten } from "../js/export-lv.js";
 import { wandAlsGaeb } from "../js/export-gaeb.js";
-import { zustandAusUrl, urlParameter, aufbauWahl, datenblattParameter, RECHENSTAND, STANDARD } from "../js/inhalte.js";
+import { zustandAusUrl, urlParameter, aufbauWahl, datenblattParameter, RECHENSTAND, STANDARD, regelnHtml, feuchteHtml } from "../js/inhalte.js";
 
 const A = JSON.parse(readFileSync(new URL("../data/aufbauten.json", import.meta.url), "utf8"));
 const fass = (id) => A.fassaden.find((f) => f.id === id);
@@ -388,6 +388,21 @@ test("Verbinder: Vorbemessung, Ergänzung nur in freien Nuten, alle halten", () 
   const g = stueckliste(r, r.fassade, inn("sicht")).find((x) => x.id === "fassade").teile;
   assert.equal(g.find((t) => t.name === "Fußauflager").menge, r.fa.achsen.length);
   assert.equal(g.find((t) => t.symbol === "lueftung").menge, 12);
+});
+
+test("Feedback Felix: Sechskantschraube, Vergussmasse, Texte nach Gutachten", () => {
+  const r = berechne({ laenge_mm: 6000, raumhoehe_mm: 2850, oeffnungen: [T, F], fassade: fass("schindel"), innen: inn("trockenbau_putz"),
+    waerme: { kennwerte: A.waerme, ziel_U: 0.2 } });
+  const roh = stueckliste(r, r.fassade, inn("trockenbau_putz")).find((x) => x.id === "spann").teile;
+  const sk = roh.find((t) => t.symbol === "sechskant");
+  assert.ok(sk && /Sechskant/.test(sk.name) && sk.menge === r.w.bom.senkkopfschrauben);
+  assert.ok(!roh.some((t) => /Senkkopf/.test(t.name)));
+  const v = roh.find((t) => t.symbol === "verguss");
+  assert.ok(v && v.einheit === "lfm" && Math.abs(v.menge - 6) < 1e-9);
+  const html = feuchteHtml(r.waerme.feuchte, A.waerme) + regelnHtml(r, inn("trockenbau_putz"));
+  assert.ok(!/bremst der Stein|kalte Bahn/.test(html));
+  assert.ok(!/ins KVH|in die Latte/.test(html));
+  assert.ok(A.waerme.ziele.find((z) => z.id === "eh40").richtwert);
 });
 
 console.log(`\n${n} Tests bestanden`);

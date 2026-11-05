@@ -57,7 +57,7 @@ export function wandAlsDxf(r, fassade, innen, info = {}) {
     const mitte = y - s.dicke / 2;
     textY = Math.min(textY, mitte);
     linie("TEXT", L, mitte, L + 150, mitte); linie("TEXT", L + 150, mitte, L + 300, textY);
-    schrift("TEXT", L + 330, textY - 20, 45, `${s.dicke} mm  ${s.name}`);
+    schrift("TEXT", L + 330, textY - 20, 45, `${String(s.dicke).replace(".", ",")} mm  ${s.name}`);
     textY -= 80;
     y -= s.dicke;
   }

@@ -608,7 +608,8 @@
         "id": "eh40",
         "name": "Effizienzhaus 40",
         "U": 0.14,
-        "text": "Übliche Größenordnung für Effizienzhaus 40 und Neubauförderung. Dort zählt das ganze Gebäude, nicht das einzelne Bauteil."
+        "richtwert": true,
+        "text": "Richtwert, kein Grenzwert: Für Effizienzhaus 40 gibt es keinen U-Höchstwert für einzelne Bauteile, nachgewiesen wird das ganze Gebäude. 0,14 ist eine übliche Größenordnung für Außenwände."
       }
     ],
     "feuchte": {

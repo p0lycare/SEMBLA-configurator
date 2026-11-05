@@ -5,6 +5,7 @@
 .aktionen { display: flex; align-items: center; flex-wrap: wrap; gap: 16px; }
 .seite { display: grid; gap: 14px; }
 .blatt h1 { font-size: clamp(28px, 5vw, 44px); }
+.blatt h1 .einheit { text-transform: none; }   /* Versalien machten aus m ein M */
 .blatt h2 { margin: 0; font-size: 22px; }
 .blatt .lead { font-size: 16px; }
 .blatt footer { border-top: 1px solid var(--linie); padding-top: 12px; display: grid; gap: 4px; }
@@ -18,7 +19,8 @@
   .app.blatt { padding: 0; max-width: none; gap: 18px; }
   .aktionen, .downloads { display: none; }
   .seite { break-inside: auto; }
-  .seite.regeln, .seite.waerme { break-before: page; }
+  .seite.regeln, .seite.waerme, .seite.stueck { break-before: page; }
+  .seite h2 { break-after: avoid; }
   .kachel, .teil, tr, .teilgruppe h3 { break-inside: avoid; }
   .kachel .wert { font-size: 18pt; }
   .teil { background: #F4F4F2 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }

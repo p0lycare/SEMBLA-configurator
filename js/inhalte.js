@@ -7,6 +7,8 @@ import { teilBild } from "./teilebilder.js";
 import { auslegen, daemmText } from "./waerme.js";
 
 export const de = (x, d = 2) => x.toLocaleString("de-DE", { minimumFractionDigits: d, maximumFractionDigits: d });
+/** Millimeter mit Dezimalkomma, Nachkommastelle nur wenn nötig (12,5 mm). */
+export const mmDe = (x) => x.toLocaleString("de-DE", { maximumFractionDigits: 1 });
 export const m = (mm, d = 2) => `${de(mm / 1000, d)} m`;
 /** Maß im 12,5-cm-Raster: drei Nachkommastellen nur, wo nötig (8,625 m statt 8,63 m). */
 export const mRaster = (mm) => m(mm, Math.round(mm) % 10 ? 3 : 2);
@@ -135,11 +137,11 @@ export function stuecklisteHtml(gruppen, materialien) {
 export function regelnHtml(r, innen, mitRegler = true) {
   const k = r.kennzahlen, fassade = r.fassade;
   const li = [
-    `<b>Raster:</b> ${m(k.laenge_mm, 3).replace(/0 m$/, " m")} = ${k.laenge_mm / 125} × 12,5 cm. Lange i3-Steine füllen die Wand, kurze i2 nur an den Enden. Die Stoßfugen springen von Lage zu Lage.`,
-    `<b>Trocken und vorgespannt:</b> kein Mörtel. ${k.spannachsen} Gewindestangen laufen durch die Kammern und spannen die Lagen zwischen Bodenblech und Spannplatte zusammen, höchstens alle 37,5 cm.`,
+    `<b>Raster:</b> ${m(k.laenge_mm, 3).replace(/0 m$/, " m")} = ${k.laenge_mm / 125} × 12,5 cm. Lange i3-Steine füllen die Wand, kurze i2 nur an den Enden. Die Stoßfugen sind von Lage zu Lage versetzt.`,
+    `<b>Trocken und vorgespannt:</b> kein Mörtel. ${k.spannachsen} Gewindestangen laufen durch die Kammern und spannen die Lagen zwischen Bodenblech und Spannplatte zusammen. Die Spannachsen haben höchstens 37,5 cm Abstand (drei Raster).`,
   ];
   if (fassade.schichten.length || innen.schichten.length) {
-    li.push(`<b>Lösbare Verbinder:</b> ${k.verbinder_fa + k.verbinder_ia} Verbinder sitzen in den Nuten, immer in Steinmitte und nie in einer Fuge. Nichts wird gebohrt oder gedübelt.`);
+    li.push(`<b>Lösbare Verbinder:</b> ${k.verbinder_fa + k.verbinder_ia} Verbinder sitzen in den Nuten, immer in Steinmitte und nie in einer Fuge. In den Stein wird nicht gebohrt oder gedübelt; befestigt werden nur die Anschlüsse an Boden und Decke.`);
     const b = r.bemessung || {}, pz = (x) => `${Math.round(x * 100)} %`;
     const teile = [];
     if (b.fa) teile.push(`außen höchstens ${pz(b.fa.max)} (Windsog in Windzone 2, Gebäude bis 10 m, auch an der Gebäudeecke; das Eigengewicht trägt ein Fußauflager)`);
@@ -169,11 +171,11 @@ export function waermeHtml(r, innen, A, zielId) {
   }
   const zeilen = kw.ziele.map((z) => {
     const x = auslegen(roh, innen, kw, z.U, dichte);
-    return `<tr${z.id === zielId ? ' aria-current="true"' : ""}><td>${z.name}</td><td class="zahl">${de(z.U)}</td>
-      <td class="zahl">${daemmText(x)}</td><td class="zahl">${de(x.U, 3)}</td><td>${x.erfuellt ? "erfüllt" : "nicht erreicht"}</td></tr>`;
+    return `<tr${z.id === zielId ? ' aria-current="true"' : ""}><td>${z.name}</td><td class="zahl">${z.richtwert ? "≈ " : ""}${de(z.U)}</td>
+      <td class="zahl">${daemmText(x)}</td><td class="zahl">${de(x.U, 3)}</td><td>${z.richtwert ? (x.erfuellt ? "erreichbar" : "nicht erreichbar") : x.erfuellt ? "erfüllt" : "nicht erreicht"}</td></tr>`;
   }).join("");
   const sd = (s) => (s.sd != null ? s.sd : s.mu != null ? s.mu * s.dicke / 1000 : null);
-  const schicht = (s, aussen) => `<tr><td>${esc(s.name)}</td><td class="zahl">${s.dicke} mm</td>
+  const schicht = (s, aussen) => `<tr><td>${esc(s.name)}</td><td class="zahl">${mmDe(s.dicke)} mm</td>
     <td class="zahl">${s.lambda ? de(s.lambda, 3) : "–"}</td><td class="zahl">${sd(s) != null ? de(sd(s)) : "–"}</td>
     <td>${s.lambda || s.sd ? "" : aussen ? "hinterlüftet, nicht angesetzt" : s.art === "halter" ? "Wärmebrücke als Zuschlag" : ""}</td></tr>`;
   const innenS = [...innen.schichten].reverse().map((s) => schicht(s, false)).join("");
@@ -183,7 +185,7 @@ export function waermeHtml(r, innen, A, zielId) {
   return `
     <p><b>U = ${de(w.U, 3)} W/(m²K)</b> für ${fassade.name} mit ${daemmText(fassade)} Dämmung und Innenseite ${innen.name}. ${ziel.text}</p>
     <div class="tabelle"><table>
-      <thead><tr><th>Ziel</th><th class="zahl">U max.</th><th class="zahl">Dämmung</th><th class="zahl">U</th><th></th></tr></thead>
+      <thead><tr><th>Ziel</th><th class="zahl">U max. bzw. Richtwert</th><th class="zahl">Dämmung</th><th class="zahl">U</th><th></th></tr></thead>
       <tbody>${zeilen}</tbody></table></div>
     ${feuchteHtml(w.feuchte, kw)}
     <h3>Schichten von innen nach außen</h3>
@@ -203,7 +205,7 @@ export function feuchteHtml(fe, kw) {
   const f = kw.feuchte, g = fe.glaser, b = fe.bahn;
   const zeichen = (ok) => `<span class="${ok ? "u-ok" : "u-nein"}">${ok ? "✓" : "✗"}</span>`;
   const li = [];
-  if (fe.luftdicht === "innen") li.push(`<b>Luftdichte Ebene innen:</b> der Putz, mit überputzten Plattenstößen. Steckdosen und Schalter als luftdichte Hohlwanddosen, Durchführungen und Anschlüsse an Boden, Decke und Fenster luftdicht ausführen.${b ? "" : " Eine Dampfbremse außen entfällt: Den Dampf bremst der Stein, eine kalte Bahn mitten im Aufbau würde nur Tauwasser sammeln."}`);
+  if (fe.luftdicht === "innen") li.push(`<b>Luftdichte Ebene innen:</b> der Putz, mit überputzten Plattenstößen. Steckdosen und Schalter als luftdichte Hohlwanddosen, Durchführungen und Anschlüsse an Boden, Decke und Fenster luftdicht ausführen.${b ? "" : " Eine Dampfbremse ist nicht erforderlich: Die luftdichte Ebene liegt innen (Putz), nach außen ist der Aufbau diffusionsoffen."}`);
   else if (fe.luftdicht === "bahn") li.push(`<b>Luftdichte Ebene außen:</b> Die Steinfugen sind nicht luftdicht. Die Dampfbremse wird nach der Gefachdämmung auf die Holz-UK getackert und an Stößen, Rändern und Anschlüssen luftdicht verklebt. Die Schrauben der Konterlattung durchdringen sie unter Pressung; das gilt nach DIN 4108-7, 6.1.2 als ausreichend luftdicht. Damit Raumluft an der Bahn nicht kondensiert, muss sie warm genug bleiben.`);
   else li.push(`<b>Keine luftdichte Ebene:</b> Die Steinfugen sind nicht luftdicht, und dieser Aufbau hat keine luftdichte Schicht. Innenseite verputzen oder eine luftdichte Bahn vorsehen. ${zeichen(false)}`);
   if (b) {

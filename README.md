@@ -24,7 +24,7 @@ Dann <http://localhost:8000/> öffnen. Die Einbettung lässt sich unter <http://
 | `js/sembla-core.js`, `js/sembla-aufbau.js` | Rechenkern und Modul 2 (Verbinder, Latten) der [Planungs-Suite](https://github.com/p0lycare/SEMBLA-planning-suite), **unverändert** übernommen, nie von Hand ändern |
 | `js/rechenkern.version.json` | Herkunft der übernommenen Module (Commit, Prüfsumme, Datum) |
 | `data/steine.json` | reduzierte Steingeometrie i2/i3 (aus den reduzierten Bauteil-OBJs) |
-| `data/spannteile.json` | Spannteile: Mutter, Kopplungsmutter, Senkkopfschraube, Einlegeblech (aus den Bauteil-OBJs) |
+| `data/spannteile.json` | Spannteile: Mutter, Kopplungsmutter, Sechskantschraube DIN 933, Einlegeblech (aus den Bauteil-OBJs) |
 | `tools/obj-zu-json.mjs` | wandelt Bauteil-OBJs in diese Netze: `node tools/obj-zu-json.mjs ziel.json name=teil.obj …` |
 | `js/ansicht2d.js`, `js/modell3d.js` | 2D-Wandansicht (SVG) und 3D-Modell (three.js 0.160 vom CDN) |
 | `js/einbettung.js` | postMessage an sembla.de: Höhe, Formular, Ereignisse |

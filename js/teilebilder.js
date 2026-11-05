@@ -64,10 +64,11 @@ export function teilBild(t, farben) {
     case "kopplungsmutter": return svg(`<rect x="52" y="38" width="56" height="24" rx="2" fill="${K.stahl}" ${linie}/>`
       + [64, 80, 96].map((x) => `<line x1="${x}" y1="38" x2="${x}" y2="62" stroke="${K.stahlDunkel}" stroke-width="1"/>`).join(""));
     case "mutter": return svg(sechseck(80, 50, 24, K.stahl) + `<circle cx="80" cy="50" r="10" fill="#FDFDFD" ${linie}/>`);
-    case "senkkopf": return svg(`<path d="M40 38 L58 50 L40 62 Z" fill="${K.stahl}" ${linie}/><rect x="57" y="45" width="66" height="10" fill="${K.stahl}" ${linie}/>`
+    case "sechskant": return svg(`<rect x="43" y="36" width="14" height="28" rx="1" fill="${K.stahl}" ${linie}/><line x1="43" y1="45" x2="57" y2="45" stroke="${K.stahlDunkel}" stroke-width="1"/><line x1="43" y1="55" x2="57" y2="55" stroke="${K.stahlDunkel}" stroke-width="1"/><rect x="57" y="45" width="66" height="10" fill="${K.stahl}" ${linie}/>`
       + Array.from({ length: 15 }, (_, i) => `<line x1="${62 + i * 4}" y1="45.5" x2="${64 + i * 4}" y2="54.5" stroke="${K.stahlDunkel}" stroke-width="1"/>`).join(""));
     case "spannplatte": return svg(`<rect x="50" y="20" width="60" height="60" rx="2" fill="${K.stahl}" ${linie}/><circle cx="80" cy="50" r="7" fill="#FDFDFD" ${linie}/>`);
     case "einlegeblech": return svg(`<rect x="38" y="30" width="84" height="40" rx="3" fill="${K.stahl}" ${linie}/>` + sechseck(80, 50, 13, K.stahlDunkel) + `<circle cx="80" cy="50" r="5" fill="#FDFDFD" ${linie}/>`);
+    case "verguss": return svg(`<rect x="30" y="44" width="100" height="10" fill="${K.stahl}" ${linie}/><path d="M26 54 Q40 60 54 56 T82 57 T110 56 T134 54 V66 H26 Z" fill="#B9B6AC" ${linie}/>`);
     case "ausgleichsblech": return svg(`<rect x="72" y="20" width="16" height="60" fill="${K.stahl}" ${linie}/>`);
     case "deckenanschluss": return svg(`<path d="M45 25 H75 V65 H115 V75 H65 V35 H45 Z" fill="${K.stahl}" ${linie}/><circle cx="95" cy="70" r="2.5" fill="#FDFDFD" ${linie}/><circle cx="70" cy="45" r="2.5" fill="#FDFDFD" ${linie}/>`);
     case "verbinder": return svg(`<rect x="56" y="30" width="48" height="40" rx="8" fill="${K.gruen}" ${linie}/><rect x="74" y="22" width="12" height="56" rx="3" fill="${K.gruen}" ${linie}/><circle cx="80" cy="50" r="5" fill="#FDFDFD" ${linie}/>`);

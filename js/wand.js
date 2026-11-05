@@ -51,8 +51,9 @@ export function masseText(o) {
 // Mindestbreite der Wandstücke neben und zwischen Öffnungen (2 Raster = ein i2).
 const RAND_MIN_GRID = 2;
 
-// Verbinderschrauben aus dem Mock-up der Demowand (Senkkopf M6).
-export const VERBINDERSCHRAUBEN = { fa: "M6 × 75 (ins KVH)", ia: "M6 × 45 (in die Latte 27 mm)" };
+// Verbinderschrauben aus dem Mock-up der Demowand: Maschinenschrauben M6, sie gehen durch das Holz
+// in den Verbinder (nicht ins Holz geschraubt).
+export const VERBINDERSCHRAUBEN = { fa: "M6 × 75 (durch das KVH)", ia: "M6 × 45 (durch die Latte 27 mm)" };
 
 // Eingaben für Modul 2 der Suite (Standardwerte aus storage.standardEingaben().aufbau).
 const AUFBAU_STANDARD = {

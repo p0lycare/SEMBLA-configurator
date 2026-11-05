@@ -21,7 +21,9 @@ const { roh, innen, ziel, waerme, verbinder } = aufbauWahl(A, zustand);
 const r = berechne({ ...zustand, fassade: roh, innen, waerme, verbinder });
 
 $("datum").textContent = new Date().toLocaleDateString("de-DE", { day: "numeric", month: "long", year: "numeric" });
-$("titel").textContent = `Wand ${m(r.kennzahlen.laenge_mm)} × ${m(r.kennzahlen.raumhoehe_mm)}`;
+// Einheit in eigenem span: die Überschrift steht in Versalien, die Einheit bleibt „m“.
+const mTitel = (mm) => m(mm).replace(/ m$/, ' <span class="einheit">m</span>');
+$("titel").innerHTML = `Wand ${mTitel(r.kennzahlen.laenge_mm)} × ${mTitel(r.kennzahlen.raumhoehe_mm)}`;
 $("untertitel").textContent = zusammenfassung({ ...zustand, fassade: r.fassade, innen }, r);
 zeichne($("zeichnung"), r);
 $("kacheln").innerHTML = kachelnHtml(r);

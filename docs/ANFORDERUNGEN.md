@@ -102,7 +102,7 @@ Gesamtdicke ≈ 460 mm, U ≈ 0,27 W/(m²K). Mit 100 mm Außendämmung (Referenz
 **Im Mock-up neu festgelegte Regeln**
 
 - **Schraubenlänge Konterlatte → KVH** = Latte + Dämmplatte + mindestens 50 mm Einbindung im KVH, wobei die Spitze ≥ 8 mm Abstand zum Stein hält (seit 03.11.2026: ≥ 4 mm, Kapitel 16). Beispiel: 30 + 80 + 50 → **Holzbauschraube 6 × 160**. Mit 6 × 180 käme die Spitze an den Stein. Nicht auf Höhe der Verbinder schrauben.
-- **Verbinderschrauben:** Senkkopf **M6 × 75** für FA ins KVH, **M6 × 55** für IA in die Latte.
+- **Verbinderschrauben:** Maschinenschrauben **M6 × 75** für FA durch das KVH, **M6 × 45** für IA durch die Latte (nicht ins Holz geschraubt).
 - Traglatten auf Konterlatten mit Holzbauschrauben 5 × 80. Lehmbauplatten mit Schnellbauschrauben 3,9 × 55 und Unterlegscheibe.
 - Ein **Fußauflager** unter den Konterlatten wird empfohlen. Ohne Fußauflager reicht die Verbinder-Tragfähigkeit draußen nicht (126 % Ausnutzung).
 - Größter Lattenabstand innen ≤ 625 mm. Der Stoß der Lehmplatten liegt auf einer Latte (≥ 29 mm Auflage je Rand).

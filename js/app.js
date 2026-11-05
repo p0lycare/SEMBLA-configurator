@@ -270,8 +270,8 @@ function uKurz(w, ziel, fassade) {
   const fe = w.feuchte;
   const tau = fe ? (fe.ok ? " · Tauwasserschutz DIN 4108-3 ✓" : " · <span class=\"u-nein\">Tauwasserschutz prüfen</span>") : "";
   return w.erfuellt
-    ? `<span class="u-ok"><b>U = ${de(w.U, 3)} W/(m²K)</b> (Ziel ${ziel.name}, U ≤ ${de(ziel.U)}) mit ${daemmText(fassade)} Dämmung${tau}</span>`
-    : `<span class="u-nein"><b>U = ${de(w.U, 3)} W/(m²K)</b>: ${ziel.name} mit diesem Aufbau nicht erreicht, auch nicht mit ${daemmText(fassade)}.</span>`;
+    ? `<span class="u-ok"><b>U = ${de(w.U, 3)} W/(m²K)</b> (${ziel.richtwert ? `Richtwert ${ziel.name}, U ≈ ${de(ziel.U)}` : `Ziel ${ziel.name}, U ≤ ${de(ziel.U)}`}) mit ${daemmText(fassade)} Dämmung${tau}</span>`
+    : `<span class="u-nein"><b>U = ${de(w.U, 3)} W/(m²K)</b>: ${ziel.richtwert ? `Richtwert ${ziel.name}` : ziel.name} mit diesem Aufbau nicht erreicht, auch nicht mit ${daemmText(fassade)}.</span>`;
 }
 
 // ---------- Formular ----------

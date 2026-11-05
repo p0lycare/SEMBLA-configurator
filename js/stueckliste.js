@@ -55,7 +55,7 @@ function spannTeile(r) {
   teile.push(
     { symbol: "kopplungsmutter", name: "Kopplungsmutter M10", menge: b.kopplungsmuttern_basis + b.verbindungsmuttern, einheit: "Stk",
       detail: `${b.kopplungsmuttern_basis} am Fuß, ${b.verbindungsmuttern} an Stößen` },
-    { symbol: "senkkopf", name: "Senkkopfschraube M10", menge: b.senkkopfschrauben, einheit: "Stk", detail: "von unten durchs Bodenblech" },
+    { symbol: "sechskant", name: "Sechskantschraube M10 × 30", menge: b.senkkopfschrauben, einheit: "Stk", detail: "DIN 933, von unten durchs Bodenblech" },
   );
   if (zp) teile.push({ symbol: "einlegeblech", name: "Einlegeblech mit Mutter", menge: zp, einheit: "Stk", detail: "Zwischenspannpunkt" });
   teile.push(
@@ -65,6 +65,10 @@ function spannTeile(r) {
   for (const [len, n] of zaehle(w.base_plate.teile, (t) => t.bauteil_mm)) {
     teile.push({ symbol: "bodenblech", name: "Bodenblech", menge: n, einheit: "Stk", detail: `${len} × 125 mm`, laenge: len });
   }
+  // Die Bodenbleche liegen in einem Bett aus Vergussmasse; die Menge hängt von der Ebenheit des
+  // Untergrunds ab, darum nur die Länge als Richtwert.
+  teile.push({ symbol: "verguss", name: "Vergussmasse unter den Bodenblechen", menge: Math.round(w.length_mm / 100) / 10, einheit: "lfm", ca: true,
+    detail: "Bett je nach Ebenheit des Untergrunds" });
   teile.push({ symbol: "ausgleichsblech", name: "Ausgleichsblech", menge: w.ausgleichspunkte.length, einheit: "Stk", detail: "20 × 100 × 8 mm" });
   if (w.deckenanschlusspunkte.length)
     teile.push({ symbol: "deckenanschluss", name: "Deckenanschluss", menge: w.deckenanschlusspunkte.length, einheit: "Stk", detail: "Winkel auf Spannachse" });
@@ -101,7 +105,7 @@ function ausbauTeile(r, aufbau, ver, seite) {
         // Gefachdämmung: ohne den Anteil der Ständer bzw. Latten (Breite je Achsraster).
         const staender = s.art === "feld" && aufbau.schichten.find((x) => x.art === "staender" || x.art === "latte_v");
         const anteil = staender && aufbau.achsraster_mm ? 1 - staender.breite / aufbau.achsraster_mm : 1;
-        Object.assign(t, { menge: nettoFlaeche(w, 0, L, 0, H) / 1e6 * anteil, einheit: "m²", detail: `${s.dicke} mm` });
+        Object.assign(t, { menge: nettoFlaeche(w, 0, L, 0, H) / 1e6 * anteil, einheit: "m²", detail: `${String(s.dicke).replace(".", ",")} mm` });
         break;
       }
       case "halter":

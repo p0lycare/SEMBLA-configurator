@@ -12,8 +12,9 @@ const FASE = 3;          // Kantenrundung der vereinfachten Steine
 const NUT_B = 22, NUT_T = 10, KAMMER = 58;
 // Spannteile aus den Bauteil-OBJs (data/spannteile.json, Ursprung in der Stangenachse, y nach
 // oben). Bis die Netze geladen sind, stehen Quader mit denselben Außenmaßen: Breite, y0, y1, Tiefe.
-const ERSATZ = { mutter: [17, 0, 8, 19.6], langmutter: [17, 0, 30, 19.6], senkkopf: [22.4, 0, 30.3, 22.4], einlegeblech: [47, -8.5, 1.5, 90] };
+const ERSATZ = { mutter: [17, 0, 8, 19.6], langmutter: [17, 0, 30, 19.6], sechskant: [17, 0, 36.4, 19.6], einlegeblech: [47, -8.5, 1.5, 90] };
 const EINLEGEBLECH_OBEN = 1.5;   // Oberkante des Blechs über seinem Ursprung
+const SECHSKANT_KOPF = 6.4;       // Kopfhöhe DIN 933 M10; der Kopf liegt unter dem Bodenblech
 // Gestufte Darstellung: jede Schicht endet um STUFE_MM früher als die darunterliegende.
 const STUFE_MM = 450;
 
@@ -247,7 +248,8 @@ export function erstelle(canvas) {
     });
 
     // Spannsystem: Gewindestange je Segment, Kopplungsmuttern an den Stößen. Am Wandfuß
-    // Senkkopfschraube durchs Bodenblech in die Kopplungsmutter, die Stange steckt zur Hälfte darin.
+    // Sechskantschraube (DIN 933) von unten durchs Bodenblech in die Kopplungsmutter, die Stange
+    // steckt zur Hälfte darin.
     // An jedem Spannplatten-Ende Platte und Spannmutter (oben darauf, über einer Öffnung darunter).
     const spann = new THREE.Group();
     const stahl = mat(farben.stahl, { metalness: 0.6, roughness: 0.4 });
@@ -263,7 +265,7 @@ export function erstelle(canvas) {
       spann.add(rod);
       let y = start;
       for (const l of laengen.slice(0, -1)) { y += l; kopplung.push({ x, y: y - 15 }); }
-      if (fuss) { kopplung.push({ x, y: sg.z0_mm }); schrauben.push({ x, y: sg.z0_mm - 10 }); }
+      if (fuss) { kopplung.push({ x, y: sg.z0_mm }); schrauben.push({ x, y: sg.z0_mm - 10 - SECHSKANT_KOPF }); }
       else {
         platten.push({ x0: x - 60, x1: x + 60, y0: sg.z0_mm - 10, y1: sg.z0_mm, z0: -THICK / 2 - 60, z1: -THICK / 2 + 60 });
         muttern.push({ x, y: sg.z0_mm - 18 });
@@ -271,7 +273,7 @@ export function erstelle(canvas) {
       platten.push({ x0: x - 60, x1: x + 60, y0: sg.z1_mm, y1: sg.z1_mm + 10, z0: -THICK / 2 - 60, z1: -THICK / 2 + 60 });
       muttern.push({ x, y: sg.z1_mm + 10 });
     }
-    spann.add(quader(platten, stahl), teil("mutter", muttern, stahl), teil("langmutter", kopplung, stahl), teil("senkkopf", schrauben, stahl));
+    spann.add(quader(platten, stahl), teil("mutter", muttern, stahl), teil("langmutter", kopplung, stahl), teil("sechskant", schrauben, stahl));
     // Einlegebleche der Zwischenspannpunkte mit Mutter: Oberkante bündig mit der Lagenoberkante,
     // sie liegen in der Lage und gehen beim Rückbau mit ihr.
     const lageAn = (z) => w.courses.findIndex((c) => Math.abs(c.oberkante_mm - z) < 1);
