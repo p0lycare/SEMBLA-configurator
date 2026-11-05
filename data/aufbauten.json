@@ -583,8 +583,8 @@
     "stein": {
       "R": 0.169,
       "quelle": "Stein: λB = 0,74 W/(m·K) für Betonsteine nach DIN 4108-4, Tab. 1, Z. 4.4.1, auf 125 mm; äquivalente Wärmeleitfähigkeit nach DIN EN 1745 noch nicht bestimmt",
-      "mu": 15,
-      "quelle_mu": "Stein: μ = 15 angenommen (trocken gefügt, Fugen mindern den Widerstand)"
+      "mu": 0,
+      "quelle_mu": "Der Stein wird im Tauwasserschutz nicht als Dampfbremse angesetzt (trocken gefügt, fugenreich)"
     },
     "halter": {
       "chi_W_K": 0.015,

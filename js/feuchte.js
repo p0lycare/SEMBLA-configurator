@@ -56,7 +56,8 @@ export function glaserSchichten(fassade, innen, kw) {
   const ende = fassade?.belueftung_ab ? fassade.schichten.findIndex((s) => s.id === fassade.belueftung_ab) : -1;
   const aussen = ende >= 0 ? fassade.schichten.slice(0, ende) : fassade?.schichten || [];
   const aussenLagen = zonenListe(aussen).map(gefachLage).filter(Boolean);
-  const stein = { name: kw.stein.name || "SEMBLA-Stein", R: kw.stein.R, sd: (kw.stein.mu ?? 15) * (kw.stein.dicke_mm ?? 125) / 1000 };
+  // Der Stein zählt nur mit seinem Wärmewiderstand; als Dampfbremse wird er nicht angesetzt (μ = 0).
+  const stein = { name: kw.stein.name || "SEMBLA-Stein", R: kw.stein.R, sd: (kw.stein.mu ?? 0) * (kw.stein.dicke_mm ?? 125) / 1000 };
   return [...innenLagen, stein, ...aussenLagen];
 }
 

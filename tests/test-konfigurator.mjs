@@ -7,7 +7,7 @@ import { berechne, oeffnungenAufloesen, oeffnungsMasse, schraubenlaenge, schicht
 import { GRID, FORBIDDEN_N } from "../js/sembla-core.js";
 import { stueckliste, alsCsv } from "../js/stueckliste.js";
 import { auslegen, uWert, mitDaemmung } from "../js/waerme.js";
-import { feuchteschutz, ps, taupunkt } from "../js/feuchte.js";
+import { feuchteschutz, glaserSchichten, ps, taupunkt } from "../js/feuchte.js";
 import { wandAlsIfc } from "../js/export-ifc.js";
 import { traglattenReihen } from "../js/aufbau-geometrie.js";
 import { freieHoehen, nachweis } from "../js/verbinder.js";
@@ -403,6 +403,16 @@ test("Feedback Felix: Sechskantschraube, Vergussmasse, Texte nach Gutachten", ()
   assert.ok(!/bremst der Stein|kalte Bahn/.test(html));
   assert.ok(!/ins KVH|in die Latte/.test(html));
   assert.ok(A.waerme.ziele.find((z) => z.id === "eh40").richtwert);
+});
+
+test("Feuchteschutz: Stein nicht als Dampfbremse angesetzt, verputzte Innenseite ohne Dampfbremse", () => {
+  const stein = glaserSchichten(fass("schindel"), inn("trockenbau_putz"), A.waerme).find((l) => /Stein/.test(l.name));
+  assert.equal(stein.sd, 0);
+  for (const f of ["schindel", "holzleiste"]) for (const i of ["trockenbau_putz", "lehm_putz", "sicht", "trockenbau"]) {
+    const x = auslegen(fass(f), inn(i), A.waerme, 0.2);
+    assert.ok(x.feuchte.tauwasserOk && x.erfuellt, `${f}/${i}`);
+    assert.equal(x.aufbau.schichten.some((s) => s.id === "dampfbremse"), !inn(i).luftdicht, `${f}/${i}`);
+  }
 });
 
 console.log(`\n${n} Tests bestanden`);

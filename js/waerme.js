@@ -102,7 +102,7 @@ function befestigerZuschlag(fassade, RT) {
  * Schichten, die nur ohne luftdichte Innenseite gebraucht werden (die Dampfbremse als luftdichte
  * Ebene), entfallen bei verputzter Innenseite: Die luftdichte Ebene ist dann der Putz, nach außen
  * ist der Aufbau diffusionsoffen. Der Stein wird dabei nicht als Dampfbremse angesetzt
- * (Gutachten Grebe 08.12.2025: fugenreich, unverputzt). Die instationäre Prüfung (WUFI) dieser
+ * (fugenreich, unverputzt; wie im bauphysikalischen Gutachten). Die instationäre Prüfung (WUFI) dieser
  * Trockenbauvariante steht noch aus.
  */
 export function fuerInnen(fassade, innen) {

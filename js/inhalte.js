@@ -191,7 +191,7 @@ export function waermeHtml(r, innen, A, zielId) {
     <h3>Schichten von innen nach außen</h3>
     <div class="tabelle"><table>
       <thead><tr><th>Schicht</th><th class="zahl">Dicke</th><th class="zahl">λ W/(m·K)</th><th class="zahl">s<sub>d</sub> m</th><th></th></tr></thead>
-      <tbody>${innenS}<tr><td>SEMBLA-Stein</td><td class="zahl">125 mm</td><td class="zahl">–</td><td class="zahl">${de((kw.stein.mu ?? 15) * THICK / 1000)}</td><td>R = ${de(kw.stein.R)} m²K/W</td></tr>${aussenS}</tbody></table></div>
+      <tbody>${innenS}<tr><td>SEMBLA-Stein</td><td class="zahl">125 mm</td><td class="zahl">–</td><td class="zahl">${kw.stein.mu ? de(kw.stein.mu * THICK / 1000) : "–"}</td><td>R = ${de(kw.stein.R)} m²K/W${kw.stein.mu ? "" : ", als Dampfbremse nicht angesetzt"}</td></tr>${aussenS}</tbody></table></div>
     <p class="klein">Rechnung nach DIN EN ISO 6946: Mittel aus oberem und unterem Grenzwert für Schichten mit Holz im Gefach, R<sub>si</sub> = ${de(kw.Rsi)}, R<sub>se</sub> = ${de(fassade.hinterlueftet ? kw.Rse_hinterlueftet : kw.Rse)}${fassade.hinterlueftet ? " (hinterlüftet)" : ""}.
       λ sind Bemessungswerte (Wärmeleitstufe); für den Nachweis gilt der Wert des eingesetzten Produkts. ${kw.stein.quelle}. ${kw.stein.quelle_mu}.
       ${w.schrauben ? `Holzbauschrauben durch die Holzfaserplatte nach DIN EN ISO 6946 Anhang F: + ${de(w.schrauben, 3)} W/(m²K).` : ""} ${w.zuschlag ? `Wandhalter: ${de(w.halterJeM2, 1)} je m² (einer je Verbinder) × χ = ${de(kw.halter.chi_W_K, 3)} W/K = + ${de(w.zuschlag, 3)} W/(m²K).` : ""}
