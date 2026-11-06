@@ -446,4 +446,13 @@ test("Einlagig gedämmte Holz-UK: eine Dämmlage, Dampfbremse nur ohne Innenputz
   assert.ok(/Dampfbremse/.test(fe.bahn && fe.glaser.lagen.find((l) => l.bahn).name));
 });
 
+test("Konfigurator-Höhen (Wandhöhe 2,40–4,80 m in 20-cm-Schritten): nur volle Steine, keine Ausgleichslage", () => {
+  for (let H = 2400; H <= 4800; H += 200) {
+    const r = berechne({ laenge_mm: 6000, raumhoehe_mm: H + DECKENFUGE_MM, oeffnungen: [T], fassade: fass("schindel"), innen: inn("trockenbau_putz") });
+    assert.equal(r.kennzahlen.wandhoehe_mm, H);
+    assert.equal(r.kennzahlen.ausgleich_mm, 0);
+    assert.equal(r.kennzahlen.lagen, H / 200);
+  }
+});
+
 console.log(`\n${n} Tests bestanden`);

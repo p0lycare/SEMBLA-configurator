@@ -171,7 +171,7 @@ export function lvDaten(r, fassade, innen, info = {}) {
       + `Steinformate i3 (375 × 125 × 200 mm, ${k.i3} Stück) und i2 (250 × 125 × 200 mm, ${k.i2} Stück) nach Verlegeplan. `
       + `Vorspannung über ${k.spannachsen} Spannachsen mit Gewindestangen M10 in den Steinkammern zwischen Bodenblech und Spannplatte, Abstand der Spannachsen höchstens 37,5 cm (drei Raster)${zp ? `, ${zp} Zwischenspannpunkte mit Einlegeblech` : ""}. `
       + `Einschließlich Bodenbleche im Bett aus Vergussmasse, Gewindestangen, Kopplungs- und Spannmuttern, Spannplatten${zp ? ", Einlegebleche" : ""}${k.ausgleich_mm ? `, oberste Lage als Ausgleichslage ${k.ausgleich_mm} mm` : ""}. `
-      + `Wandlänge ${rm(k.laenge_mm / 1000)} m, lichte Raumhöhe ${de(k.raumhoehe_mm / 1000)} m.`
+      + `Wandlänge ${rm(k.laenge_mm / 1000)} m, Wandhöhe ${de(k.wandhoehe_mm / 1000)} m, lichte Raumhöhe ${de(k.raumhoehe_mm / 1000)} m.`
       + (sicht ? ` Oberfläche Sichtmauerwerk ${sicht}, Steinfarbe [nach Bemusterung].` : "") });
   const nr = { tuer: 0, fenster: 0 };
   for (const op of r.oeffnungen.filter(Boolean)) {

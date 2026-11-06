@@ -10,7 +10,7 @@ import { schichtLagen, aufbauDicke, schraubenlaenge } from "./aufbau-geometrie.j
 
 export { schichtLagen, aufbauDicke, schraubenlaenge };
 
-export const GRENZEN = { laengeMin: 1000, laengeMax: 12000, hoeheMin: 2500, hoeheMax: 5000 };
+export const GRENZEN = { laengeMin: 1000, laengeMax: 12000, hoeheMin: 2400, hoeheMax: 5000 };
 
 // Annahmen (mit Planungsteam prüfen): Fuge zwischen Wandkrone und Rohdecke, und ab welcher
 // Resthöhe eine Ausgleichslage gesetzt wird. Darunter wird die Deckenfuge entsprechend größer.
@@ -294,7 +294,7 @@ export function berechne(cfg) {
 export function zusammenfassung(cfg, r) {
   const k = r.kennzahlen;
   const m = (mm) => (mm / 1000).toFixed(2).replace(".", ",");
-  const teile = [`Wand ${m(k.laenge_mm)} × ${m(k.raumhoehe_mm)} m`];
+  const teile = [`Wand ${m(k.laenge_mm)} × ${m(k.wandhoehe_mm)} m`];
   const tueren = r.oeffnungen.filter((o) => o && o.art === "tuer").length;
   const fenster = r.oeffnungen.filter((o) => o && o.art === "fenster").length;
   if (tueren) teile.push(`${tueren} ${tueren === 1 ? "Tür" : "Türen"}`);

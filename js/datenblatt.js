@@ -23,7 +23,7 @@ const r = berechne({ ...zustand, fassade: roh, innen, waerme, verbinder });
 $("datum").textContent = new Date().toLocaleDateString("de-DE", { day: "numeric", month: "long", year: "numeric" });
 // Einheit in eigenem span: die Überschrift steht in Versalien, die Einheit bleibt „m“.
 const mTitel = (mm) => m(mm).replace(/ m$/, ' <span class="einheit">m</span>');
-$("titel").innerHTML = `Wand ${mTitel(r.kennzahlen.laenge_mm)} × ${mTitel(r.kennzahlen.raumhoehe_mm)}`;
+$("titel").innerHTML = `Wand ${mTitel(r.kennzahlen.laenge_mm)} × ${mTitel(r.kennzahlen.wandhoehe_mm)}`;
 $("untertitel").textContent = zusammenfassung({ ...zustand, fassade: r.fassade, innen }, r);
 zeichne($("zeichnung"), r);
 $("kacheln").innerHTML = kachelnHtml(r);
@@ -41,8 +41,8 @@ $("drucken").onclick = () => window.print();
 
 // Downloads für die Planung: BIM (IFC4), CAD (DXF) und Ausschreibungstext. Die Exporte werden erst
 // beim Klick geladen, damit das Datenblatt schnell erscheint.
-const dateiname = `SEMBLA-Wand_${(r.kennzahlen.laenge_mm / 1000).toFixed(2).replace(".", ",")}x${(r.kennzahlen.raumhoehe_mm / 1000).toFixed(2).replace(".", ",")}m`;
-const info = { link: location.href, titel: `SEMBLA-Wand ${m(r.kennzahlen.laenge_mm)} × ${m(r.kennzahlen.raumhoehe_mm)}`, windlast: verbinder?.last?.text };
+const dateiname = `SEMBLA-Wand_${(r.kennzahlen.laenge_mm / 1000).toFixed(2).replace(".", ",")}x${(r.kennzahlen.wandhoehe_mm / 1000).toFixed(2).replace(".", ",")}m`;
+const info = { link: location.href, titel: `SEMBLA-Wand ${m(r.kennzahlen.laenge_mm)} × ${m(r.kennzahlen.wandhoehe_mm)}`, windlast: verbinder?.last?.text };
 function herunterladen(inhalt, name, typ) {
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([inhalt], { type: typ }));

@@ -2,7 +2,7 @@
 // (?l=…&h=…), damit sich ein Stand teilen lässt, und im localStorage, damit sie ein Neuladen übersteht.
 
 import { wirksameZwischenpunkte } from "./sembla-core.js";
-import { berechne, zusammenfassung, GRENZEN, OEFFNUNGEN, oeffnungsMasse, masseText } from "./wand.js";
+import { berechne, zusammenfassung, GRENZEN, DECKENFUGE_MM, OEFFNUNGEN, oeffnungsMasse, masseText } from "./wand.js";
 import { zeichne } from "./ansicht2d.js";
 import { eingebettet, hoeheMelden, formularOeffnen, ereignis } from "./einbettung.js";
 import { stueckliste, alsCsv } from "./stueckliste.js";
@@ -58,11 +58,16 @@ function pills(el, aktiv, beiKlick) {
 }
 
 $("laenge").value = zustand.laenge_mm;
-$("hoehe").value = zustand.raumhoehe_mm;
+// Höhe nur in vollen Lagen à 20 cm, ohne Ausgleichslage: Der Regler stellt die Wandhöhe ein, die
+// Raumhöhe ist Wandhöhe plus Deckenfuge. Ältere Links mit freier Raumhöhe werden abgerundet.
+const LAGE = 200, WAND = { min: 2400, max: 4800 };
+const wandhoehe = (raum) => Math.min(Math.max(Math.floor((raum - DECKENFUGE_MM) / LAGE) * LAGE, WAND.min), WAND.max);
+zustand.raumhoehe_mm = wandhoehe(zustand.raumhoehe_mm) + DECKENFUGE_MM;
+$("hoehe").min = WAND.min; $("hoehe").max = WAND.max; $("hoehe").step = LAGE;
+$("hoehe").value = zustand.raumhoehe_mm - DECKENFUGE_MM;
 $("laenge").min = GRENZEN.laengeMin; $("laenge").max = GRENZEN.laengeMax;
-$("hoehe").min = GRENZEN.hoeheMin; $("hoehe").max = GRENZEN.hoeheMax;
 $("laenge").oninput = (e) => { zustand.laenge_mm = +e.target.value; planen(); };
-$("hoehe").oninput = (e) => { zustand.raumhoehe_mm = +e.target.value; planen(); };
+$("hoehe").oninput = (e) => { zustand.raumhoehe_mm = +e.target.value + DECKENFUGE_MM; planen(); };
 const meter = (mm) => `${de(mm / 1000, Math.round(mm) % 10 ? 3 : 2)} Meter`;
 
 // ---------- Öffnungen ----------
@@ -246,9 +251,10 @@ function aktualisieren() {
   const r = ergebnis, k = r.kennzahlen, fassade = r.fassade, waerme = r.waerme;
 
   $("laengeWert").textContent = m(k.laenge_mm, 3).replace(/0 m$/, " m");
-  $("hoeheWert").textContent = m(k.raumhoehe_mm);
+  $("hoeheWert").textContent = m(k.wandhoehe_mm);
+  $("hoeheText").textContent = `${k.lagen} Lagen à 20 cm, nur volle Steine · für lichte Raumhöhe ab ${m(k.raumhoehe_mm)}`;
   $("laenge").setAttribute("aria-valuetext", meter(k.laenge_mm));
-  $("hoehe").setAttribute("aria-valuetext", meter(k.raumhoehe_mm));
+  $("hoehe").setAttribute("aria-valuetext", `${meter(k.wandhoehe_mm)}, ${k.lagen} Lagen`);
   pills($("fassaden"), fassade.id, (v) => { zustand.fassade = v; ereignis("fassade_gewaehlt", { fassade: v }); planen(); });
   pills($("innen"), innen.id, (v) => { zustand.innen = v; ereignis("innen_gewaehlt", { innen: v }); planen(); });
   $("fassadeText").textContent = fassade.kurz;
@@ -258,7 +264,7 @@ function aktualisieren() {
   oeffnungenZeichnen(r);
   if (zustand.aktiv === -1) $("oeffnungHinweis").hidden = true;
 
-  $("masse").textContent = `${m(k.laenge_mm)} × ${m(k.raumhoehe_mm)} · ${k.steine} Steine`;
+  $("masse").textContent = `${m(k.laenge_mm)} × ${m(k.wandhoehe_mm)} · ${k.steine} Steine`;
 
   $("kacheln").innerHTML = kachelnHtml(r, { kurz: true });
   // Der aufgeklappte Rechenweg bleibt beim Neuzeichnen offen.
