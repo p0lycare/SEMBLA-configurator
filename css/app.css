@@ -104,6 +104,23 @@ input[type=range] { width: 100%; height: 28px; accent-color: var(--gruen); margi
 .viewer-hint { position: absolute; left: 12px; bottom: 8px; margin: 0; font-size: 12px; color: var(--text2); pointer-events: none; }
 .viewer-fehler { position: absolute; inset: 0; margin: 0; display: grid; place-items: center; padding: 24px; text-align: center; color: var(--text2); }
 .steuerung { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; }
+/* „Mehr“ am 3D-Modell: Schicht-Schalter und Auffächern, aufklappbar. */
+.mehr[open] { flex-basis: 100%; display: grid; gap: 10px; justify-items: start; }
+.mehr[open] .mehr-inhalt { justify-self: stretch; }
+.mehr > summary { cursor: pointer; list-style: none; font-size: 13px; min-height: 40px; padding: 7px 14px; border-radius: 999px; border: 1px solid var(--rand); display: inline-flex; align-items: center; gap: 6px; }
+.mehr > summary::-webkit-details-marker { display: none; }
+.mehr > summary::after { content: "▾"; font-size: 11px; }
+.mehr[open] > summary::after { content: "▴"; }
+.mehr > summary:focus-visible, details > summary:focus-visible { outline: 2px solid var(--gruen); outline-offset: 2px; }
+.mehr-inhalt { display: grid; gap: 10px; }
+/* Aufklappbare Details in den Infos (Rechenweg, alle Positionen). */
+details.rechenweg, details.alle-teile { margin-top: 12px; }
+details.rechenweg > summary, details.alle-teile > summary { cursor: pointer; font-size: 14px; text-decoration: underline; width: fit-content; }
+details.rechenweg[open] > summary, details.alle-teile[open] > summary { margin-bottom: 12px; }
+.teile-kurz { list-style: none; margin: 0; padding: 0; display: grid; }
+.teile-kurz li { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--linie); font-size: 15px; }
+.teile-kurz li span { color: var(--text2); white-space: nowrap; }
+.feuchte-kurz { margin: 12px 0 0; }
 .rueckbau b { color: var(--text); }
 .rueckbau input { accent-color: var(--text); }
 .erklaerung { margin: 0; min-height: 2.9em; font-size: 15px; }
@@ -194,5 +211,3 @@ a.knopf { display: inline-block; text-decoration: none; }
 .zeile-senden { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
 .danke { margin: 0; font-family: var(--f-bold); font-size: 18px; }
 .waerme ul.feuchte { margin: 0; padding-left: 18px; display: grid; gap: 6px; font-size: 14px; }
-.desktop-hinweis { display: none; margin: 0; padding: 10px 14px; border: 1px solid var(--linie); border-radius: 12px; font-size: 14px; color: var(--text2); }
-@media (max-width: 700px) { .desktop-hinweis { display: block; } }

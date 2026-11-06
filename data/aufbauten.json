@@ -14,7 +14,7 @@
     {
       "id": "schindel",
       "name": "Keramik-Schindel auf Holz-UK",
-      "kurz": "Kleinformatige Keramik-Schindeln auf Holzlattung, gedämmt mit Mineralwolle im Gefach und winddichter Holzfaserplatte. Aufbau der SEMBLA-Demowand.",
+      "kurz": "Keramik-Schindeln auf Holzlattung, gedämmt mit Mineralwolle und winddichter Holzfaserplatte.",
       "linie": "Holz-UK mit Mineralwolle & Holzfaser",
       "uk": "holz",
       "achsraster_mm": 625,
@@ -139,7 +139,7 @@
     {
       "id": "holzleiste",
       "name": "Holzleisten auf Holz-UK",
-      "kurz": "Horizontale Rhombus-Leisten mit offener Fuge auf Konterlattung, gedämmt mit Mineralwolle im Gefach und winddichter Holzfaserplatte.",
+      "kurz": "Rhombus-Leisten mit offener Fuge, gedämmt mit Mineralwolle und winddichter Holzfaserplatte.",
       "linie": "Holz-UK mit Mineralwolle & Holzfaser",
       "uk": "holz",
       "achsraster_mm": 625,
@@ -254,7 +254,7 @@
     {
       "id": "schindel_einlagig",
       "name": "Keramik-Schindel auf Holz-UK, einlagig gedämmt",
-      "kurz": "Kleinformatige Keramik-Schindeln auf Holzlattung. Eine Dämmlage: Mineralwolle im Gefach zwischen den KVH, außen nur eine dünne winddichte Holzfaserplatte, innen die Dampfbremse auf dem Stein.",
+      "kurz": "Keramik-Schindeln auf Holzlattung, eine Dämmlage mit Dampfbremse auf dem Stein und dünner Holzfaserplatte.",
       "linie": "Holz-UK einlagig mit Mineralwolle",
       "uk": "holz",
       "achsraster_mm": 625,
@@ -363,7 +363,7 @@
     {
       "id": "holzleiste_einlagig",
       "name": "Holzleisten auf Holz-UK, einlagig gedämmt",
-      "kurz": "Horizontale Rhombus-Leisten mit offener Fuge auf Konterlattung. Eine Dämmlage: Mineralwolle im Gefach zwischen den KVH, außen nur eine UV-stabile Fassadenbahn, innen die Dampfbremse auf dem Stein.",
+      "kurz": "Rhombus-Leisten mit offener Fuge, eine Dämmlage mit Dampfbremse auf dem Stein und UV-stabiler Fassadenbahn.",
       "linie": "Holz-UK einlagig mit Mineralwolle",
       "uk": "holz",
       "achsraster_mm": 625,
@@ -532,7 +532,7 @@
     {
       "id": "faserzement",
       "name": "Großformatplatte auf Alu-UK",
-      "kurz": "Großformatige, durchgefärbte Faserzementplatten, verdeckt befestigt. Plattenfugen liegen im SEMBLA-Raster.",
+      "kurz": "Großformatige, durchgefärbte Faserzementplatten, verdeckt befestigt, Fugen im SEMBLA-Raster.",
       "linie": "Klassisch: Metall & Steinwolle",
       "uk": "alu",
       "achsraster_mm": 625,
@@ -651,7 +651,7 @@
     {
       "id": "lehm_putz",
       "name": "Lehmbauplatte verputzt",
-      "kurz": "Installationsebene aus Latten auf IA-Verbindern, darauf Lehmbauplatten, vollflächig mit Lehmputz. Der Putz ist die luftdichte Ebene.",
+      "kurz": "Installationsebene mit Lehmbauplatten, vollflächig mit Lehmputz; der Putz ist die luftdichte Ebene.",
       "flaechengewicht_kg_m2": 50,
       "achsraster_mm": 625,
       "schichten": [
@@ -728,7 +728,7 @@
     {
       "id": "trockenbau_putz",
       "name": "Trockenbau verputzt",
-      "kurz": "Installationsebene 27 mm aus Latten auf IA-Verbindern, mit Mineralwolle gedämmt, darauf Gipsfaserplatten, vollflächig verputzt. Der Putz ist die luftdichte Ebene; Steckdosen und Schalter in flachen, luftdichten Hohlwanddosen.",
+      "kurz": "Gedämmte Installationsebene mit Gipsfaserplatten, vollflächig verputzt; der Putz ist die luftdichte Ebene.",
       "flaechengewicht_kg_m2": 30,
       "achsraster_mm": 625,
       "schichten": [

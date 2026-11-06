@@ -103,19 +103,22 @@ export function aufbauWahl(A, zustand, { nurFreigegeben = false } = {}) {
   return { roh, innen, ziel, verbinder: A.verbinder, waerme: { kennwerte: A.waerme, ziel_U: ziel.U, ...(fest ? { fest } : {}) } };
 }
 
-export function kachelnHtml(r) {
+/** Kennwerte als Kacheln. kurz: nur Steine, Wanddicke, U-Wert und Gewicht (Konfigurator); das Datenblatt zeigt alle. */
+export function kachelnHtml(r, { kurz = false } = {}) {
   const k = r.kennzahlen, fassade = r.fassade;
+  const KURZ = new Set(["steine", "dicke", "u", "gewicht"]);
   const liste = [
-    [k.steine, `Steine: ${k.i3} × i3, ${k.i2} × i2`],
-    [k.lagen, k.ausgleich_mm ? `Lagen, oben ${k.ausgleich_mm} mm Ausgleich` : "Lagen à 20 cm"],
-    [k.spannachsen, "Spannachsen, M10 vorgespannt"],
-    [`${k.verbinder_fa} / ${k.verbinder_ia}`, "Verbinder Fassade / innen"],
-    [`${de(k.flaeche_m2, 1)} m²`, r.w.openings.length ? "Wandfläche ohne Öffnungen" : "Wandfläche"],
-    [`${Math.round(k.dicke_gesamt_mm)} mm`, "Wanddicke gesamt"],
-    ...(fassade.daemmstufen ? [[`${de(r.waerme.U, 3)}`, `U-Wert W/(m²K), ${daemmText(fassade)} Dämmung`]] : []),
-    [`${de(k.gewicht_rohwand_kg / 1000, 1)} t`, `Rohwand, ${ROHWAND.flaechengewicht_kg_m2} kg/m²`],
+    ["steine", k.steine, `Steine: ${k.i3} × i3, ${k.i2} × i2`],
+    ["lagen", k.lagen, k.ausgleich_mm ? `Lagen, oben ${k.ausgleich_mm} mm Ausgleich` : "Lagen à 20 cm"],
+    ["achsen", k.spannachsen, "Spannachsen, M10 vorgespannt"],
+    ["verbinder", `${k.verbinder_fa} / ${k.verbinder_ia}`, "Verbinder Fassade / innen"],
+    ["flaeche", `${de(k.flaeche_m2, 1)} m²`, r.w.openings.length ? "Wandfläche ohne Öffnungen" : "Wandfläche"],
+    ["dicke", `${Math.round(k.dicke_gesamt_mm)} mm`, "Wanddicke gesamt"],
+    ...(fassade.daemmstufen ? [["u", `${de(r.waerme.U, 3)}`, `U-Wert W/(m²K), ${daemmText(fassade)} Dämmung`]] : []),
+    ["gewicht", `${de(k.gewicht_rohwand_kg / 1000, 1)} t`, `Rohwand, ${ROHWAND.flaechengewicht_kg_m2} kg/m²`],
   ];
-  return liste.map(([w, b]) => `<div class="kachel"><span class="wert">${w}</span><span class="bez">${b}</span></div>`).join("");
+  return liste.filter(([id]) => !kurz || KURZ.has(id))
+    .map(([, w, b]) => `<div class="kachel"><span class="wert">${w}</span><span class="bez">${b}</span></div>`).join("");
 }
 
 export function stuecklisteHtml(gruppen, materialien) {
@@ -133,9 +136,31 @@ export function stuecklisteHtml(gruppen, materialien) {
     </section>`).join("");
 }
 
-/** Regeln als Listenpunkte. mitRegler: Hinweis auf den Rückbau-Regler (nur im Konfigurator). */
-export function regelnHtml(r, innen, mitRegler = true) {
+/** Stückliste in einer Zeile je Gruppe (Konfigurator); die Einzelpositionen stehen darunter aufklappbar. */
+export function stuecklisteKurzHtml(gruppen, r) {
+  const k = r.kennzahlen;
+  const stk = (g) => g.teile.filter((t) => t.einheit === "Stk").reduce((a, t) => a + t.menge, 0);
+  const zeile = (g) => g.id === "wand" ? `${stk(g)} Steine`
+    : g.id === "spann" ? `${k.spannachsen} Spannachsen`
+    : `${g.teile.length} Positionen`;
+  return `<ul class="teile-kurz">${gruppen.map((g) => `<li><b>${esc(g.titel)}</b><span>${zeile(g)}</span></li>`).join("")}</ul>`;
+}
+
+/**
+ * Regeln als Listenpunkte. mitRegler: Hinweis auf den Rückbau-Regler (nur im Konfigurator).
+ * kurz: nur Raster, trocken vorgespannt, lösbar und zirkulär (Konfigurator); Bemessung,
+ * Schrauben und Verwendbarkeit stehen im Datenblatt.
+ */
+export function regelnHtml(r, innen, mitRegler = true, { kurz = false } = {}) {
   const k = r.kennzahlen, fassade = r.fassade;
+  if (kurz) {
+    const ausbau = fassade.schichten.length || innen.schichten.length;
+    return [
+      `<b>Raster:</b> ${m(k.laenge_mm, 3).replace(/0 m$/, " m")} = ${k.laenge_mm / 125} × 12,5 cm, die Stoßfugen von Lage zu Lage versetzt.`,
+      `<b>Trocken und vorgespannt:</b> kein Mörtel. ${k.spannachsen} Gewindestangen spannen die Lagen zusammen.`,
+      `<b>Lösbar und zirkulär:</b> ${ausbau ? `${k.verbinder_fa + k.verbinder_ia} Verbinder sitzen in den Nuten, gebohrt oder gedübelt wird nicht. ` : ""}Jede Schicht ist sortenrein trennbar, alle ${k.steine} Steine sind wiederverwendbar.${mitRegler ? " Probieren Sie den Rückbau-Regler." : ""}`,
+    ].map((t) => `<li><span>${t}</span></li>`).join("");
+  }
   const li = [
     `<b>Raster:</b> ${m(k.laenge_mm, 3).replace(/0 m$/, " m")} = ${k.laenge_mm / 125} × 12,5 cm. Lange i3-Steine füllen die Wand, kurze i2 nur an den Enden. Die Stoßfugen sind von Lage zu Lage versetzt.`,
     `<b>Trocken und vorgespannt:</b> kein Mörtel. ${k.spannachsen} Gewindestangen laufen durch die Kammern und spannen die Lagen zwischen Bodenblech und Spannplatte zusammen. Die Spannachsen haben höchstens 37,5 cm Abstand (drei Raster).`,
@@ -159,11 +184,19 @@ export function regelnHtml(r, innen, mitRegler = true) {
   return li.map((t) => `<li><span>${t}</span></li>`).join("");
 }
 
+/** Verwendbarkeit in einer Zeile (Kleingedrucktes im Konfigurator). */
+export function verwendbarkeitText(r) {
+  return r.fassade.schichten.length
+    ? "Verwendbarkeit: abP für SEMBLA als nichttragende Innenwand in Vorbereitung; mit vorgehängter Fassade Zustimmung im Einzelfall."
+    : "Verwendbarkeit: nichttragende Innenwand nach DIN 4103-1, abP in Vorbereitung.";
+}
+
 export function hinweiseHtml(r) {
   return r.hinweise.map((t) => `<li><span>${t}</span></li>`).join("");
 }
 
-export function waermeHtml(r, innen, A, zielId) {
+/** Wärmeschutz. rechenweg: "offen" (Datenblatt) oder "einklappen": Schichten, Tauwasserschutz und Rechenweg hinter „Rechenweg anzeigen“. */
+export function waermeHtml(r, innen, A, zielId, { rechenweg = "offen" } = {}) {
   const kw = A.waerme, w = r.waerme, fassade = r.fassade, dichte = w.halterJeM2 || undefined;
   const roh = A.fassaden.find((f) => f.id === fassade.id);
   if (!roh.daemmstufen) {
@@ -187,6 +220,7 @@ export function waermeHtml(r, innen, A, zielId) {
     <div class="tabelle"><table>
       <thead><tr><th>Ziel</th><th class="zahl">U max. bzw. Richtwert</th><th class="zahl">Dämmung</th><th class="zahl">U</th><th></th></tr></thead>
       <tbody>${zeilen}</tbody></table></div>
+    ${rechenweg === "einklappen" ? `${feuchteKurz(w.feuchte)}<details class="rechenweg"><summary>Rechenweg anzeigen</summary>` : ""}
     ${feuchteHtml(w.feuchte, kw)}
     <h3>Schichten von innen nach außen</h3>
     <div class="tabelle"><table>
@@ -196,7 +230,15 @@ export function waermeHtml(r, innen, A, zielId) {
       λ sind Bemessungswerte (Wärmeleitstufe); für den Nachweis gilt der Wert des eingesetzten Produkts. ${kw.stein.quelle}. ${kw.stein.quelle_mu}.
       ${w.schrauben ? `Holzbauschrauben durch die Holzfaserplatte nach DIN EN ISO 6946 Anhang F: + ${de(w.schrauben, 3)} W/(m²K).` : ""} ${w.zuschlag ? `Wandhalter: ${de(w.halterJeM2, 1)} je m² (einer je Verbinder) × χ = ${de(kw.halter.chi_W_K, 3)} W/K = + ${de(w.zuschlag, 3)} W/(m²K).` : ""}
       Wärmebrücken an Anschlüssen (Sockel, Fenster, Decke, Ecken) sind nicht enthalten; im GEG-Nachweis werden sie mit einem Zuschlag ΔU<sub>WB</sub> (pauschal 0,10 bzw. 0,05 W/(m²K) mit Gleichwertigkeitsnachweis) oder detailliert berücksichtigt.
-      Vorbemessung: Den Nachweis nach GEG für das Gebäude führt die Energieberatung.</p>`;
+      Vorbemessung: Den Nachweis nach GEG für das Gebäude führt die Energieberatung.</p>
+    ${rechenweg === "einklappen" ? "</details>" : ""}`;
+}
+
+/** Tauwasserschutz in einer Zeile, für die eingeklappte Darstellung. */
+function feuchteKurz(fe) {
+  if (!fe) return "";
+  const ok = fe.ok;
+  return `<p class="feuchte-kurz">Tauwasserschutz nach DIN 4108-3: ${ok ? '<span class="u-ok">✓ erfüllt</span>' : '<span class="u-nein">✗ nicht erfüllt</span>, Details im Rechenweg'}</p>`;
 }
 
 /** Tauwasserschutz nach DIN 4108-3: luftdichte Ebene, Temperatur an der Dampfbremse, Glaser. */

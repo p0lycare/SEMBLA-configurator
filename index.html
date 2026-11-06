@@ -22,7 +22,6 @@
     <h1>Ihre Wand in 2 Minuten</h1>
     <p class="lead">Wählen Sie Maße, Fassade und Innenausbau. Sehen Sie, wie das Raster, die Vorspannung und die lösbaren Verbinder zusammenspielen, und wie sich alles wieder zurückbauen lässt.</p>
   </header>
-  <p class="desktop-hinweis">Tipp: Am Laptop oder Desktop sehen Sie Eingaben, Modell und Kennwerte bequemer im Überblick.</p>
 
   <main class="layout">
 
@@ -42,20 +41,25 @@
           <p class="viewer-fehler" id="glFehler" hidden>Das 3D-Modell braucht WebGL. Die Ansicht zeigt dieselbe Wand in 2D.</p>
         </div>
         <div class="steuerung">
-          <div class="pills klein-pills">
+          <div class="pills klein-pills" role="group" aria-label="Blickrichtung">
             <button type="button" data-blick="aussen">Außen</button>
             <button type="button" data-blick="schraeg">Schräg</button>
             <button type="button" data-blick="innen">Innen</button>
           </div>
-          <div class="pills klein-pills" id="ebenen"></div>
+          <details class="mehr" id="mehr">
+            <summary>Mehr</summary>
+            <div class="mehr-inhalt">
+              <div class="pills klein-pills" id="ebenen" role="group" aria-label="Sichtbare Schichten"></div>
+              <div class="pills klein-pills">
+                <button type="button" id="gestuft" aria-pressed="true">Schichten gestuft</button>
+              </div>
+              <label class="regler">
+                <span class="zeile"><b>Schichten auffächern</b></span>
+                <input type="range" id="faechern" min="0" max="100" value="0" aria-label="Schichten auffächern" aria-valuetext="geschlossen">
+              </label>
+            </div>
+          </details>
         </div>
-        <div class="pills klein-pills">
-          <button type="button" id="gestuft" aria-pressed="true">Schichten gestuft</button>
-        </div>
-        <label class="regler">
-          <span class="zeile"><b>Schichten auffächern</b></span>
-          <input type="range" id="faechern" min="0" max="100" value="0" aria-label="Schichten auffächern" aria-valuetext="geschlossen">
-        </label>
         <label class="regler rueckbau">
           <span class="zeile"><b>Rückbau</b><span class="klein" id="rueckbauSchritt"></span></span>
           <input type="range" id="rueckbau" min="0" max="100" value="0" aria-label="Rückbau" aria-valuetext="Wand vollständig">
@@ -165,10 +169,15 @@
 
         <div class="info regeln" data-panel="regeln" id="info-regeln" role="tabpanel" aria-labelledby="tab-regeln">
           <ul id="regeln"></ul>
+          <p class="klein">Bemessung von Verbindern und Schrauben, Windzone und Rechenwege stehen im Datenblatt. <span id="verwendbarkeit"></span></p>
         </div>
 
         <div class="info teile" data-panel="teile" id="info-teile" role="tabpanel" aria-labelledby="tab-teile" hidden>
-          <div id="stueckliste"></div>
+          <div id="stuecklisteKurz"></div>
+          <details class="alle-teile">
+            <summary>Alle Positionen anzeigen</summary>
+            <div id="stueckliste"></div>
+          </details>
           <p class="klein">Teilebilder nicht maßstäblich. Steine und Spannsystem rechnet der Kern der SEMBLA Planungs-Suite. Mengen mit „ca.“ sind überschlägig und ohne Verschnitt.
             <button type="button" class="link" id="csv">Als CSV herunterladen</button></p>
         </div>

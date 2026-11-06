@@ -7,7 +7,7 @@ import { zeichne } from "./ansicht2d.js";
 import { eingebettet, hoeheMelden, formularOeffnen, ereignis } from "./einbettung.js";
 import { stueckliste, alsCsv } from "./stueckliste.js";
 import { daemmText } from "./waerme.js";
-import { de, m, mRaster, esc, zustandAusUrl, urlParameter, datenblattParameter, aufbauWahl, kachelnHtml, stuecklisteHtml, regelnHtml, hinweiseHtml, waermeHtml } from "./inhalte.js";
+import { de, m, mRaster, esc, zustandAusUrl, urlParameter, datenblattParameter, aufbauWahl, kachelnHtml, stuecklisteHtml, stuecklisteKurzHtml, regelnHtml, verwendbarkeitText, hinweiseHtml, waermeHtml } from "./inhalte.js";
 import { datenblattAnfrage } from "./anfrage.js";
 
 const $ = (id) => document.getElementById(id);
@@ -258,11 +258,16 @@ function aktualisieren() {
 
   $("masse").textContent = `${m(k.laenge_mm)} × ${m(k.raumhoehe_mm)} · ${k.steine} Steine`;
 
-  $("kacheln").innerHTML = kachelnHtml(r);
-  $("waerme").innerHTML = waermeHtml(r, innen, A, ziel.id);
+  $("kacheln").innerHTML = kachelnHtml(r, { kurz: true });
+  // Der aufgeklappte Rechenweg bleibt beim Neuzeichnen offen.
+  const rechenwegOffen = !!$("waerme").querySelector("details[open]");
+  $("waerme").innerHTML = waermeHtml(r, innen, A, ziel.id, { rechenweg: "einklappen" });
+  if (rechenwegOffen) $("waerme").querySelector("details")?.setAttribute("open", "");
   teile = stueckliste(r, fassade, innen);
+  $("stuecklisteKurz").innerHTML = stuecklisteKurzHtml(teile, r);
   $("stueckliste").innerHTML = stuecklisteHtml(teile, A.materialien);
-  $("regeln").innerHTML = regelnHtml(r, innen);
+  $("regeln").innerHTML = regelnHtml(r, innen, true, { kurz: true });
+  $("verwendbarkeit").textContent = verwendbarkeitText(r);
   if (zustand.ersetzt.length) r.hinweise.unshift("Der Link enthielt eine Variante, die der Konfigurator derzeit nicht anbietet. Sie wurde durch die Voreinstellung ersetzt.");
   $("hinweise").innerHTML = hinweiseHtml(r);
 
