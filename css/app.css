@@ -42,6 +42,9 @@ button { font: inherit; color: inherit; }
 .oeffnung-zeile .zeile { display: flex; align-items: center; gap: 10px; }
 .oeffnung-zeile .zeile .klein { flex: 1; }
 .oeffnung-zeile.passt-nicht { opacity: .55; }
+.oeffnung-titel { flex: 1; display: flex; align-items: baseline; gap: 10px; min-width: 0; padding: 0; border: 0; background: none; text-align: left; cursor: pointer; }
+.oeffnung-titel:focus-visible { outline: 2px solid var(--gruen); outline-offset: 2px; }
+.oeffnung-zeile.zu [data-pos], .oeffnung-zeile.zu .masse-wahl { display: none; }
 .oeffnung-zeile .masse-wahl { display: flex; flex-wrap: wrap; gap: 8px 14px; }
 .oeffnung-zeile .mass { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text2); }
 .oeffnung-zeile .mass select { font: inherit; color: var(--text); background: var(--grund); border: 1px solid var(--linie); border-radius: 6px; padding: 2px 4px; }
@@ -72,6 +75,7 @@ legend { padding: 0; margin-bottom: 10px; }
 
 .regler { display: grid; gap: 6px; }
 .regler .zeile { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+.regler .zeile b .klein { font-family: var(--f-text); margin-left: 6px; }
 input[type=range] { width: 100%; height: 28px; accent-color: var(--gruen); margin: 0; }
 
 .pills { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -88,6 +92,26 @@ input[type=range] { width: 100%; height: 28px; accent-color: var(--gruen); margi
 .karte[aria-pressed=true] { border-color: var(--text); box-shadow: inset 4px 0 0 var(--gruen); }
 .karte .titel { font-family: var(--f-bold); font-size: 14px; line-height: 1.25; }
 .karte .daten { font: 12px/1.4 var(--f-mono); color: var(--text2); display: flex; flex-wrap: wrap; gap: 4px 12px; }
+
+/* Eingaben neben der Vorschau: so knapp, dass das Panel nicht höher wird als die Bühne links. */
+@media (min-width: 1000px) {
+  .eingaben { padding: 16px 18px; gap: 14px; font-size: 15px; }
+  .eingaben .schritt { gap: 8px; }
+  .eingaben .regler { gap: 0; }
+  .eingaben input[type=range] { height: 24px; }
+  .eingaben legend { margin-bottom: 6px; }
+  .eingaben fieldset { gap: 8px; }
+  .eingaben .klein, .eingaben .link { font-size: 12.5px; }
+  .eingaben .oeffnungsliste { gap: 8px; }
+  .eingaben .oeffnung-zeile { padding: 6px 10px; gap: 0; }
+  .eingaben .entfernen { width: 28px; height: 28px; font-size: 16px; }
+  .eingaben .klein-pills button { min-height: 36px; padding: 5px 12px; }
+  .eingaben .karten { gap: 6px; grid-template-columns: 1fr 1fr; }
+  .eingaben .karte { padding: 8px 10px; gap: 2px; }
+  .eingaben .karte .titel { font-size: 13.5px; }
+  .eingaben .karte .daten { font-size: 11.5px; }
+  .eingaben p { margin: 0; }
+}
 .link { cursor: pointer; background: none; border: 0; padding: 0; text-align: left; text-decoration: underline; font-size: 14px; }
 
 .ergebnis { display: grid; gap: 18px; min-width: 0; }
@@ -211,3 +235,5 @@ a.knopf { display: inline-block; text-decoration: none; }
 .zeile-senden { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
 .danke { margin: 0; font-family: var(--f-bold); font-size: 18px; }
 .waerme ul.feuchte { margin: 0; padding-left: 18px; display: grid; gap: 6px; font-size: 14px; }
+.oeffnung-zeile.zu [data-info] { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.oeffnungsliste, .oeffnung-zeile { grid-template-columns: minmax(0, 1fr); min-width: 0; }

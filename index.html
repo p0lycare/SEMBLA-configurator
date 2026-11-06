@@ -82,14 +82,12 @@
       <div class="schritt">
         <p class="kicker"><span class="nr">1</span> Wand <button type="button" class="link zuruecksetzen" id="zuruecksetzen" title="Alle Eingaben auf die Voreinstellung zurücksetzen">Zurücksetzen</button></p>
         <label class="regler">
-          <span class="zeile"><b>Wandlänge</b><output id="laengeWert" class="mono"></output></span>
+          <span class="zeile"><b>Wandlänge <span class="klein">im 12,5-cm-Raster</span></b><output id="laengeWert" class="mono"></output></span>
           <input type="range" id="laenge" min="1000" max="12000" step="125" aria-label="Wandlänge">
-          <span class="klein">im 12,5-cm-Raster</span>
         </label>
         <label class="regler">
-          <span class="zeile"><b>Wandhöhe</b><output id="hoeheWert" class="mono"></output></span>
+          <span class="zeile"><b>Wandhöhe <span class="klein" id="hoeheText">volle Lagen à 20 cm</span></b><output id="hoeheWert" class="mono"></output></span>
           <input type="range" id="hoehe" min="2400" max="4800" step="200" aria-label="Wandhöhe">
-          <span class="klein" id="hoeheText">nur volle Steine, Lagen à 20 cm</span>
         </label>
         <fieldset>
           <legend>Öffnungen</legend>
@@ -103,16 +101,14 @@
       </div>
 
       <div class="schritt">
-        <p class="kicker"><span class="nr">2</span> Fassade</p>
+        <p class="kicker"><span class="nr">2</span> Fassade <button type="button" class="link zuruecksetzen" id="fassadeAnfragen">Ihr System fehlt?</button></p>
         <div class="karten" id="fassaden" role="group" aria-label="Fassade"></div>
         <p class="klein" id="fassadeText"></p>
-        <p class="klein" id="uKurz" aria-live="polite"></p>
-        <button type="button" class="link" id="fassadeAnfragen">Ihr Fassadensystem fehlt? Jetzt anfragen</button>
       </div>
 
       <div class="schritt">
         <p class="kicker"><span class="nr">3</span> Innenseite</p>
-        <div class="pills" id="innen" role="group" aria-label="Innenseite"></div>
+        <div class="pills klein-pills" id="innen" role="group" aria-label="Innenseite"></div>
         <p class="klein" id="innenText"></p>
       </div>
     </section>

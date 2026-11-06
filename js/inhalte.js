@@ -4,7 +4,7 @@
 import { ROHWAND, VERBINDERSCHRAUBEN, OEFFNUNGEN, oeffnungsMasse } from "./wand.js";
 import { THICK } from "./sembla-core.js";
 import { teilBild } from "./teilebilder.js";
-import { auslegen, daemmText } from "./waerme.js";
+import { daemmText } from "./waerme.js";
 
 export const de = (x, d = 2) => x.toLocaleString("de-DE", { minimumFractionDigits: d, maximumFractionDigits: d });
 /** Millimeter mit Dezimalkomma, Nachkommastelle nur wenn nötig (12,5 mm). */
@@ -203,16 +203,11 @@ export function hinweiseHtml(r) {
 
 /** Wärmeschutz. rechenweg: "offen" (Datenblatt) oder "einklappen": Schichten, Tauwasserschutz und Rechenweg hinter „Rechenweg anzeigen“. */
 export function waermeHtml(r, innen, A, zielId, { rechenweg = "offen" } = {}) {
-  const kw = A.waerme, w = r.waerme, fassade = r.fassade, dichte = w.halterJeM2 || undefined;
+  const kw = A.waerme, w = r.waerme, fassade = r.fassade;
   const roh = A.fassaden.find((f) => f.id === fassade.id);
   if (!roh.daemmstufen) {
     return `<p>Ohne Fassade bleibt die Rohwand ungedämmt (U ≈ ${de(w.U, 1)} W/(m²K)). Für beheizte Räume wählen Sie eine gedämmte Fassade.</p>`;
   }
-  const zeilen = kw.ziele.map((z) => {
-    const x = auslegen(roh, innen, kw, z.U, dichte);
-    return `<tr${z.id === zielId ? ' aria-current="true"' : ""}><td>${z.name}</td><td class="zahl">${z.richtwert ? "≈ " : ""}${de(z.U)}</td>
-      <td class="zahl">${daemmText(x)}</td><td class="zahl">${de(x.U, 3)}</td><td>${z.richtwert ? (x.erfuellt ? "erreichbar" : "nicht erreichbar") : x.erfuellt ? "erfüllt" : "nicht erreicht"}</td></tr>`;
-  }).join("");
   const sd = (s) => (s.sd != null ? s.sd : s.mu != null ? s.mu * s.dicke / 1000 : null);
   const schicht = (s, aussen) => `<tr><td>${esc(s.name)}</td><td class="zahl">${mmDe(s.dicke)} mm</td>
     <td class="zahl">${s.lambda ? de(s.lambda, 3) : "–"}</td><td class="zahl">${sd(s) != null ? de(sd(s)) : "–"}</td>
@@ -220,12 +215,12 @@ export function waermeHtml(r, innen, A, zielId, { rechenweg = "offen" } = {}) {
   const innenS = [...innen.schichten].reverse().map((s) => schicht(s, false)).join("");
   let hinterLuft = false;
   const aussenS = fassade.schichten.map((s) => { if (s.art === "latte_v") hinterLuft = true; return schicht(s, hinterLuft && !s.lambda); }).join("");
+  // Kein Bezug auf Förderprogramme oder Bestandsanforderungen: Die Wand ist ein Neubauprodukt, den
+  // Nachweis führt das Gebäude. Die Dämmstärke ist auf einen festen U-Wert ausgelegt (Datenblatt-Link: `w`).
   const ziel = kw.ziele.find((z) => z.id === zielId) || kw.ziele[0];
   return `
-    <p><b>U = ${de(w.U, 3)} W/(m²K)</b> für ${fassade.name} mit ${daemmText(fassade)} Dämmung und Innenseite ${innen.name}. ${ziel.text}</p>
-    <div class="tabelle"><table>
-      <thead><tr><th>Ziel</th><th class="zahl">U max. bzw. Richtwert</th><th class="zahl">Dämmung</th><th class="zahl">U</th><th></th></tr></thead>
-      <tbody>${zeilen}</tbody></table></div>
+    <p><b>U = ${de(w.U, 3)} W/(m²K)</b> für ${fassade.name} mit ${daemmText(fassade)} Dämmung und Innenseite ${innen.name}.
+      Die Dämmstärke ist auf U ${ziel.richtwert ? "≈" : "≤"} ${de(ziel.U)} W/(m²K) ausgelegt; den energetischen Nachweis führt das Gebäude.</p>
     ${rechenweg === "einklappen" ? `${feuchteKurz(w.feuchte)}<details class="rechenweg"><summary>Rechenweg anzeigen</summary>` : ""}
     ${feuchteHtml(w.feuchte, kw)}
     <h3>Schichten von innen nach außen</h3>

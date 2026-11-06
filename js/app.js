@@ -6,7 +6,6 @@ import { berechne, zusammenfassung, GRENZEN, DECKENFUGE_MM, OEFFNUNGEN, oeffnung
 import { zeichne } from "./ansicht2d.js";
 import { eingebettet, hoeheMelden, formularOeffnen, ereignis } from "./einbettung.js";
 import { stueckliste, alsCsv } from "./stueckliste.js";
-import { daemmText } from "./waerme.js";
 import { de, m, mRaster, esc, zustandAusUrl, urlParameter, datenblattParameter, aufbauWahl, kachelnHtml, stuecklisteHtml, stuecklisteKurzHtml, regelnHtml, verwendbarkeitText, hinweiseHtml, waermeHtml } from "./inhalte.js";
 import { datenblattAnfrage } from "./anfrage.js";
 
@@ -81,6 +80,8 @@ function masseAuswahl(o, i) {
   }).join("");
 }
 let listenSchluessel = "";
+// Nur eine Öffnung zeigt Regler und Maße, die übrigen sind eine Zeile (Klick auf den Titel klappt sie auf).
+let offen = 0;
 function oeffnungenZeichnen(r) {
   const N = r.w.length_mm / 125;
   const schluessel = zustand.oeffnungen.map((o) => o.art).join() + "|" + N;
@@ -93,7 +94,7 @@ function oeffnungenZeichnen(r) {
   if (schluessel !== listenSchluessel) {
     listenSchluessel = schluessel;
     liste.innerHTML = zustand.oeffnungen.map((o, i) => `<div class="oeffnung-zeile" data-i="${i}">
-        <span class="zeile"><b>${titel(i)}</b><span class="klein mono" data-info></span>
+        <span class="zeile"><button type="button" class="oeffnung-titel" data-auf="${i}"><b>${titel(i)}</b><span class="klein mono" data-info></span></button>
           <button type="button" class="entfernen" data-weg="${i}" aria-label="${titel(i)} entfernen">×</button></span>
         <input type="range" min="0" max="${N - oeffnungsMasse(o).b}" step="1" data-pos="${i}" aria-label="Position ${titel(i)}, Abstand vom linken Wandende">
         <span class="masse-wahl">${masseAuswahl(o, i)}</span>
@@ -109,13 +110,17 @@ function oeffnungenZeichnen(r) {
       planen();
     }));
     liste.querySelectorAll("[data-weg]").forEach((el) => (el.onclick = () => {
-      zustand.oeffnungen.splice(+el.dataset.weg, 1); zustand.aktiv = -1; planen();
+      zustand.oeffnungen.splice(+el.dataset.weg, 1); zustand.aktiv = -1; offen = zustand.oeffnungen.length - 1; planen();
     }));
+    liste.querySelectorAll("[data-auf]").forEach((el) => (el.onclick = () => { offen = +el.dataset.auf; planen(); }));
   }
+  if (!zustand.oeffnungen[offen]) offen = zustand.oeffnungen.length - 1;
   zustand.oeffnungen.forEach((o, i) => {
     const zeile = liste.querySelector(`[data-i="${i}"]`);
     const res = r.oeffnungen[i], ms = oeffnungsMasse(o);
     zeile.classList.toggle("passt-nicht", !res);
+    zeile.classList.toggle("zu", i !== offen);
+    zeile.querySelector("[data-auf]").setAttribute("aria-expanded", String(i === offen));
     const zuHoch = ms.u + ms.h >= r.w.courses.filter((c) => !c.ausgleich).length;
     zeile.querySelector("[data-info]").textContent = res
       ? `${masseText(o)} · ab ${mRaster(res.g0 * 125)}`
@@ -135,7 +140,7 @@ function oeffnungenZeichnen(r) {
 function hinzufuegen(art) {
   if (zustand.oeffnungen.filter((o) => o.art === art).length >= OEFFNUNGEN[art].max) return;
   zustand.oeffnungen.push({ art, pos: null });
-  zustand.aktiv = zustand.oeffnungen.length - 1;
+  zustand.aktiv = offen = zustand.oeffnungen.length - 1;
   ereignis("oeffnung", { art });
   const r = berechne(cfgAktuell());
   if (!r.oeffnungen[zustand.aktiv]) {
@@ -152,8 +157,8 @@ $("plusFenster").onclick = () => hinzufuegen("fenster");
 // Zur Auswahl stehen nur freigegebene Varianten; die übrigen bleiben für ältere Links rechenbar.
 const FREI = (x) => x.freigegeben !== false;
 $("fassaden").innerHTML = A.fassaden.filter(FREI).map((f) => `
-  <button type="button" class="karte" data-wert="${f.id}">
-    <span class="titel">${esc(f.name)}</span>
+  <button type="button" class="karte" data-wert="${f.id}" title="${esc(f.name)}">
+    <span class="titel">${esc(f.karte || f.name)}</span>
     <span class="daten">${f.schichten.length ? `<span>${f.uk === "holz" ? "Holz-UK" : "Alu-UK"}</span><span>≈ ${f.flaechengewicht_kg_m2} kg/m²</span>` : "<span>Sichtmauerwerk</span>"}</span>
   </button>`).join("");
 $("innen").innerHTML = A.innen.filter(FREI).map((f) => `<button type="button" data-wert="${f.id}">${esc(f.name)}</button>`).join("");
@@ -248,18 +253,17 @@ function modellAktualisieren(r, fassade, innen) {
 function aktualisieren() {
   const { roh, innen, ziel, verbinder, waerme: wcfg } = aufbauWahl(A, zustand, { nurFreigegeben: true });
   ergebnis = berechne({ ...zustand, fassade: roh, innen, waerme: wcfg, verbinder });
-  const r = ergebnis, k = r.kennzahlen, fassade = r.fassade, waerme = r.waerme;
+  const r = ergebnis, k = r.kennzahlen, fassade = r.fassade;
 
   $("laengeWert").textContent = m(k.laenge_mm, 3).replace(/0 m$/, " m");
   $("hoeheWert").textContent = m(k.wandhoehe_mm);
-  $("hoeheText").textContent = `${k.lagen} Lagen à 20 cm, nur volle Steine · für lichte Raumhöhe ab ${m(k.raumhoehe_mm)}`;
+  $("hoeheText").textContent = `${k.lagen} volle Lagen à 20 cm`;
   $("laenge").setAttribute("aria-valuetext", meter(k.laenge_mm));
   $("hoehe").setAttribute("aria-valuetext", `${meter(k.wandhoehe_mm)}, ${k.lagen} Lagen`);
   pills($("fassaden"), fassade.id, (v) => { zustand.fassade = v; ereignis("fassade_gewaehlt", { fassade: v }); planen(); });
   pills($("innen"), innen.id, (v) => { zustand.innen = v; ereignis("innen_gewaehlt", { innen: v }); planen(); });
   $("fassadeText").textContent = fassade.kurz;
   $("innenText").textContent = innen.kurz;
-  $("uKurz").innerHTML = uKurz(waerme, ziel, fassade);
 
   oeffnungenZeichnen(r);
   if (zustand.aktiv === -1) $("oeffnungHinweis").hidden = true;
@@ -317,16 +321,6 @@ $("csv").onclick = () => {
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   ereignis("stueckliste_csv");
 };
-
-// ---------- Wärmeschutz ----------
-function uKurz(w, ziel, fassade) {
-  if (!fassade.daemmstufen) return `Ohne Dämmung U ≈ ${de(w.U, 1)} W/(m²K): für Innenwände oder unbeheizte Bereiche.`;
-  const fe = w.feuchte;
-  const tau = fe ? (fe.ok ? " · Tauwasserschutz DIN 4108-3 ✓" : " · <span class=\"u-nein\">Tauwasserschutz prüfen</span>") : "";
-  return w.erfuellt
-    ? `<span class="u-ok"><b>U = ${de(w.U, 3)} W/(m²K)</b> (${ziel.richtwert ? `Richtwert ${ziel.name}, U ≈ ${de(ziel.U)}` : `Ziel ${ziel.name}, U ≤ ${de(ziel.U)}`}) mit ${daemmText(fassade)} Dämmung${tau}</span>`
-    : `<span class="u-nein"><b>U = ${de(w.U, 3)} W/(m²K)</b>: ${ziel.richtwert ? `Richtwert ${ziel.name}` : ziel.name} mit diesem Aufbau nicht erreicht, auch nicht mit ${daemmText(fassade)}.</span>`;
-}
 
 // ---------- Formular ----------
 // Terminbuchung: HubSpot-Terminseite (30 Min., Teams) im neuen Tab.

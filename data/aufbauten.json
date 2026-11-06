@@ -4,6 +4,7 @@
     {
       "id": "sicht",
       "name": "Ohne Fassade",
+      "karte": "Ohne Fassade",
       "kurz": "Sichtmauerwerk mit Nut-Raster, z. B. für Innenwände oder Ausfachungen unter Dach.",
       "uk": null,
       "achsraster_mm": null,
@@ -14,6 +15,7 @@
     {
       "id": "schindel",
       "name": "Keramik-Schindel auf Holz-UK",
+      "karte": "Schindel zweilagig",
       "kurz": "Keramik-Schindeln auf Holzlattung, gedämmt mit Mineralwolle und winddichter Holzfaserplatte.",
       "linie": "Holz-UK mit Mineralwolle & Holzfaser",
       "uk": "holz",
@@ -255,6 +257,7 @@
     {
       "id": "schindel_einlagig",
       "name": "Keramik-Schindel auf Holz-UK, einlagig gedämmt",
+      "karte": "Schindel einlagig",
       "kurz": "Keramik-Schindeln auf Holzlattung, eine Dämmlage mit Dampfbremse auf dem Stein und dünner Holzfaserplatte.",
       "linie": "Holz-UK einlagig mit Mineralwolle",
       "uk": "holz",
@@ -364,6 +367,7 @@
     {
       "id": "holzleiste_einlagig",
       "name": "Holzleisten auf Holz-UK, einlagig gedämmt",
+      "karte": "Holzleisten einlagig",
       "kurz": "Rhombus-Leisten mit offener Fuge, eine Dämmlage mit Dampfbremse auf dem Stein und UV-stabiler Fassadenbahn.",
       "linie": "Holz-UK einlagig mit Mineralwolle",
       "uk": "holz",
