@@ -20,7 +20,8 @@ const seitenadresse = (u) => { try { const x = new URL(u); return x.origin + x.p
 const cookie = (name) => document.cookie.split("; ").find((c) => c.startsWith(name + "="))?.split("=")[1];
 
 /**
- * formular: <form> mit Feldern firstname, lastname, email, company, einwilligung;
+ * formular: <form> mit Feldern firstname, lastname, email, company, einwilligung (Pflicht) und
+ * kontakt (freiwillig, eigener Zweck);
  * knopf: öffnet das Formular; daten(): { zusammenfassung, link } der aktuellen Konfiguration;
  * beimOeffnen(): aktualisiert die Vorschau im Formular.
  */
@@ -41,12 +42,18 @@ export function datenblattAnfrage({ formular, knopf, daten, beimOeffnen = () => 
     e.preventDefault();
     const f = new FormData(formular), d = daten();
     const feld = (name, value) => ({ objectTypeId: "0-1", name, value });
-    const einwilligung = formular.querySelector(".einwilligung span").textContent.replace(/\s+/g, " ").trim();
+    // Zwei getrennte Zwecke: Das Datenblatt zu schicken ist Pflicht, der Kontaktwunsch freiwillig.
+    // HubSpot bekommt den Text genau der Häkchen, die gesetzt sind; der Vertrieb sieht den Kontaktwunsch
+    // in der Zusammenfassung.
+    const text = (name) => formular.querySelector(`[name=${name}]`).closest(".einwilligung").querySelector("span").textContent.replace(/\s+/g, " ").trim();
+    const kontakt = f.get("kontakt") === "on";
+    const einwilligung = kontakt ? `${text("einwilligung")} ${text("kontakt")}` : text("einwilligung");
+    const zusammenfassung = `${d.zusammenfassung}\nKontaktwunsch: ${kontakt ? "ja" : "nein, nur Datenblatt"}`;
     const body = {
       fields: [
         feld("firstname", f.get("firstname")), feld("lastname", f.get("lastname")),
         feld("email", f.get("email")), feld("company", f.get("company")),
-        feld(HUBSPOT.felder.link, d.link), feld(HUBSPOT.felder.zusammenfassung, d.zusammenfassung),
+        feld(HUBSPOT.felder.link, d.link), feld(HUBSPOT.felder.zusammenfassung, zusammenfassung),
       ].filter((x) => x.value),
       context: { pageUri: seitenadresse(elternSeite() || location.href), pageName: "SEMBLA Konfigurator", ...(cookie("hubspotutk") ? { hutk: cookie("hubspotutk") } : {}) },
       legalConsentOptions: { consent: {
@@ -69,7 +76,7 @@ export function datenblattAnfrage({ formular, knopf, daten, beimOeffnen = () => 
       danke.setAttribute("role", "status");
       formular.querySelector(".anfrage-formular").replaceChildren(danke);
       danke.focus();
-      ereignis("datenblatt_angefordert");
+      ereignis("datenblatt_angefordert", { kontakt });
     } catch {
       senden.disabled = false;
       status.textContent = "Das hat nicht geklappt. Bitte versuchen Sie es noch einmal oder nutzen Sie das Projektformular.";

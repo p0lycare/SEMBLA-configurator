@@ -38,7 +38,7 @@
       <div id="ansicht3d" role="tabpanel" aria-labelledby="tab3d">
         <div class="viewer">
           <canvas id="canvas3d" role="img" aria-label="3D-Modell der Wand. Ziehen zum Drehen, Mausrad oder zwei Finger zum Zoomen."></canvas>
-          <p class="viewer-hint mono">Ziehen zum Drehen · Zoomen mit Mausrad oder zwei Fingern</p>
+          <p class="viewer-hint mono" id="viewerHinweis" aria-hidden="true">Ziehen zum Drehen · Zoomen mit Mausrad oder zwei Fingern</p>
           <p class="viewer-fehler" id="glFehler" hidden>Das 3D-Modell braucht WebGL. Die Ansicht zeigt dieselbe Wand in 2D.</p>
         </div>
         <div class="steuerung">
@@ -54,11 +54,11 @@
         </div>
         <label class="regler">
           <span class="zeile"><b>Schichten auffächern</b></span>
-          <input type="range" id="faechern" min="0" max="100" value="0">
+          <input type="range" id="faechern" min="0" max="100" value="0" aria-label="Schichten auffächern" aria-valuetext="geschlossen">
         </label>
         <label class="regler rueckbau">
           <span class="zeile"><b>Rückbau</b><span class="klein" id="rueckbauSchritt"></span></span>
-          <input type="range" id="rueckbau" min="0" max="100" value="0">
+          <input type="range" id="rueckbau" min="0" max="100" value="0" aria-label="Rückbau" aria-valuetext="Wand vollständig">
         </label>
         <p class="erklaerung" id="rueckbauText"></p>
       </div>
@@ -79,12 +79,12 @@
         <p class="kicker"><span class="nr">1</span> Wand <button type="button" class="link zuruecksetzen" id="zuruecksetzen" title="Alle Eingaben auf die Voreinstellung zurücksetzen">Zurücksetzen</button></p>
         <label class="regler">
           <span class="zeile"><b>Wandlänge</b><output id="laengeWert" class="mono"></output></span>
-          <input type="range" id="laenge" min="1000" max="12000" step="125">
+          <input type="range" id="laenge" min="1000" max="12000" step="125" aria-label="Wandlänge">
           <span class="klein">im 12,5-cm-Raster</span>
         </label>
         <label class="regler">
           <span class="zeile"><b>Lichte Raumhöhe</b><output id="hoeheWert" class="mono"></output></span>
-          <input type="range" id="hoehe" min="2500" max="5000" step="50">
+          <input type="range" id="hoehe" min="2500" max="5000" step="50" aria-label="Lichte Raumhöhe">
           <span class="klein">Lagen à 20 cm, oben eine Ausgleichslage</span>
         </label>
         <fieldset>
@@ -147,7 +147,9 @@
               <label class="breit">Büro / Firma<input name="company" autocomplete="organization" placeholder="Architekturbüro, Planungsbüro …"></label>
             </div>
             <label class="einwilligung"><input type="checkbox" name="einwilligung" required>
-              <span>Ich bin einverstanden, dass Polycare meine Angaben speichert und verarbeitet, um mir das Datenblatt zu schicken und mich zu meinem Projekt zu kontaktieren. Widerruf jederzeit möglich, siehe <a href="https://www.sembla.de/datenschutz" target="_blank" rel="noopener">Datenschutz</a>.</span></label>
+              <span>Ich bin einverstanden, dass Polycare meine Angaben speichert und verarbeitet, um mir das Datenblatt zu schicken. Widerruf jederzeit möglich, siehe <a href="https://www.sembla.de/datenschutz" target="_blank" rel="noopener">Datenschutz</a>.</span></label>
+            <label class="einwilligung"><input type="checkbox" name="kontakt">
+              <span>Freiwillig: Polycare darf mich zu meinem Projekt kontaktieren.</span></label>
             <div class="zeile-senden"><button type="submit" class="knopf">Datenblatt anfordern</button><span class="klein" data-status role="status"></span></div>
           </div>
         </form>

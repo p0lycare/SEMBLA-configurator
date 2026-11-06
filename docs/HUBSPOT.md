@@ -3,6 +3,9 @@
 So läuft es ab:
 
 1. Im Konfigurator klickt man auf „Ausführliches Datenblatt per E-Mail“ und gibt Name, E-Mail, Büro und die Einwilligung ein.
+   - Zwei getrennte Häkchen: die Einwilligung, das Datenblatt zu schicken (Pflicht), und der Kontaktwunsch zum Projekt (freiwillig).
+   - Der Kontaktwunsch steht als letzte Zeile in `konfigurator_zusammenfassung` („Kontaktwunsch: ja“ bzw. „nein, nur Datenblatt“). Der Einwilligungstext an HubSpot enthält nur die gesetzten Häkchen.
+   - Der Vertrieb meldet sich nur bei „Kontaktwunsch: ja“.
 2. Der Konfigurator schickt die Angaben direkt an die Formular-Schnittstelle von HubSpot (`js/anfrage.js`, Portal 19508245). Dafür braucht es keinen Server und keinen Schlüssel.
 3. Ein HubSpot-Workflow schickt die E-Mail mit dem Link zum Datenblatt und benachrichtigt den Vertrieb.
 4. Das Datenblatt (`datenblatt.html?l=…`) zeigt die Konfiguration druckfertig, mit Ansicht, Kennwerten, Regeln, Wärmeschutz und vollständiger Stückliste. „Als PDF speichern“ nutzt den Druckdialog des Browsers.

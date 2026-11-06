@@ -192,7 +192,16 @@ $("tab3d").onclick = () => ansicht("3d");
 $("tab2d").onclick = () => ansicht("2d");
 document.querySelectorAll("[data-blick]").forEach((b) => (b.onclick = () => modell?.blick(b.dataset.blick)));
 
-$("faechern").oninput = (e) => modell?.setze({ faechern: +e.target.value / 100 });
+$("faechern").oninput = (e) => {
+  modell?.setze({ faechern: +e.target.value / 100 });
+  e.target.setAttribute("aria-valuetext", +e.target.value ? `${e.target.value} % aufgefächert` : "geschlossen");
+};
+// Der Bedienhinweis über dem Modell verschwindet nach dem ersten Drehen oder Zoomen.
+const hinweisWeg = () => {
+  $("viewerHinweis").hidden = true;
+  ["pointerdown", "wheel", "touchstart"].forEach((t) => $("canvas3d").removeEventListener(t, hinweisWeg));
+};
+["pointerdown", "wheel", "touchstart"].forEach((t) => $("canvas3d").addEventListener(t, hinweisWeg, { passive: true }));
 $("gestuft").onclick = () => {
   const an = $("gestuft").getAttribute("aria-pressed") !== "true";
   $("gestuft").setAttribute("aria-pressed", String(an));
@@ -215,6 +224,7 @@ function rueckbauText(t) {
   else if (t < 0.6) { schritt = "Schritt 2 von 3"; text = `Vorspannung lösen: Die Muttern werden geöffnet, ${k?.gewindestangen ?? ""} Gewindestangen werden aus den Kammern gezogen.`; }
   else { schritt = "Schritt 3 von 3"; text = `Lage für Lage abheben${ergebnis && zwischenpunkte(ergebnis.w) ? `, die ${zwischenpunkte(ergebnis.w)} Einlegebleche der Zwischenspannpunkte kommen mit heraus` : ""}: Alle ${k?.steine ?? ""} Steine lassen sich wieder einsetzen. Das Gebäude wird zum Bauteillager.`; }
   $("rueckbauSchritt").textContent = schritt;
+  $("rueckbau").setAttribute("aria-valuetext", schritt || "Wand vollständig");
   $("rueckbauText").textContent = text;
 }
 
