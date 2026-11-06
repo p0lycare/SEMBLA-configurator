@@ -63,7 +63,7 @@ Der Konfigurator vereinfacht, darf aber **keiner Systemregel widersprechen**. Di
 - **i3** = 375 mm (3 Raster, 3 Kammern, 2 Nuten), der Regelstein, wird maximiert. **i2** = 250 mm (2 Raster), nur zum Auffüllen an den Wandenden.
 - Die Wandlänge ist ein Vielfaches von 125 mm. Segmentbreiten von 1 und 4 Raster sind nicht baubar (`FORBIDDEN_N`).
 - Die Stoßfugen benachbarter Lagen sind um mindestens 1 Raster versetzt.
-- Die Höhe wird in 200-mm-Lagen zerlegt, optional mit **einer** oberen Ausgleichslage für die Resthöhe ([G-2], [G-13], [G-14]).
+- Die Höhe wird in 200-mm-Lagen zerlegt, optional mit **einer** oberen Ausgleichslage für die Resthöhe ([G-2], [G-13], [G-14]). Der Konfigurator nutzt seit 06.11.2026 nur volle Lagen (Kap. 19).
 - Öffnungen (Tür, Fenster, Durchbruch) lassen Steine aus; der Sturz darüber wird aufgefüllt.
 
 **Vorspannung**
@@ -234,7 +234,7 @@ Bei manchen Türpositionen meldet `buildWall` einen Versatzkonflikt in der Lage 
 
 ## 11 · Wärmeschutz (ergänzt 02.11.2026)
 
-- **Ziele (wählbar):**
+- **Ziele (wählbar; seit 06.11.2026 ohne Bezug auf GEG/BEG im Konfigurator, Kap. 19):**
   - GEG/GModG Anlage 7: U ≤ 0,24 W/(m²K). Voreinstellung; im Neubau rechnet das Referenzgebäude mit 0,28.
   - BEG-Einzelmaßnahme Außenwand: U ≤ 0,20.
   - Effizienzhaus-40-Niveau: U ≤ 0,14. Das ist keine Bauteilanforderung, im Neubau gilt der Nachweis für das ganze Gebäude.
@@ -264,7 +264,7 @@ Bei manchen Türpositionen meldet `buildWall` einen Versatzkonflikt in der Lage 
 
 ## 12 · Nachschärfung (03.11.2026)
 
-- **Wärmeschutz-Ziel:** fest auf BEG-Niveau (U ≤ 0,20), keine Auswahl mehr in der Übersicht. Im Reiter „Wärmeschutz“ stehen weiterhin GEG, BEG und EH40 nebeneinander; alte Links mit `w=` gelten weiter.
+- **Wärmeschutz-Ziel:** fest auf U ≤ 0,20, keine Auswahl mehr in der Übersicht; alte Links mit `w=` gelten weiter. (Die Gegenüberstellung GEG/BEG/EH40 im Reiter „Wärmeschutz“ ist seit 06.11.2026 entfallen, Kap. 19.)
 - **Bauphysikalische Grundwerte:**
   - Stein: λB = 0,74 W/(m·K) (DIN 4108-4, Betonsteine), R = 0,17 m²K/W.
   - Dampfbremse: sd = 2 m. Bei R außen ≈ 1,33 × R innen ist die Konstruktion funktionsfähig; wir planen mit 1,5 als Reserve.
@@ -301,7 +301,7 @@ Bei manchen Türpositionen meldet `buildWall` einen Versatzkonflikt in der Lage 
 ## 14 · Holz-UK und Auswahl (03.11.2026)
 
 - **Auswahl:** Angeboten werden nur freigegebene Varianten (`freigegeben` in `data/aufbauten.json`).
-  - Fassade: Ohne Fassade, Keramik-Schindel und Holzleisten (beide auf Holz-UK).
+  - Fassade: Ohne Fassade, Keramik-Schindel und Holzleisten (beide auf Holz-UK). Stand 06.11.2026 siehe Kap. 19.
   - Innenseite: Sichtmauerwerk und Trockenbau verputzt (Voreinstellung).
   - Die Alu-UK-Fassaden und die übrigen Innenseiten bleiben für ältere Links rechenbar und werden freigegeben, wenn sie stimmig sind.
 - **Latten:** Sie laufen bis zur Wandkrone, zum Wandfuß bzw. zur Öffnungskante.
@@ -399,3 +399,18 @@ Recherche in Herstellerdatenblättern, Markt Deutschland. Herstellernamen stehen
   - WLS 035 ist in allen Dicken 60–240 mm bei mehreren Herstellern Lagerware (Glas- und Steinwolle).
 - **Installationsebene 27 mm:** Mineralwolle in 27 mm gibt es nicht. Geplant ist 30 mm WLS 035, auf 27 mm geklemmt; gerechnet mit λ = 0,035.
 - **Folge:** Voreinstellung (Schindel, Trockenbau verputzt, BEG) **437,5 mm**, Dämmung 120 + 60 mm, U 0,182. Sichtmauerwerk 429 mm (60 + 160 mm), U 0,188.
+
+## 19 · Stand 06.11.2026: Fassaden, Höhe, Wärmeschutz, Bedienung
+
+- **Fassaden (Feedback Felix 4.1/4.2):**
+  - Neu: Keramik-Schindel und Holzleisten mit **einlagig gedämmter Holz-UK**: eine Dämmlage, Dampfbremse auf dem Stein, außen eine dünne Holzfaserplatte (Schindel) bzw. eine UV-stabile Fassadenbahn (Holzleisten mit offener Fuge).
+  - Die **zweilagige Holzleiste** (offene Fuge, Holzfaserplatte ohne Fassadenbahn) ist zurückgezogen: In der internen Vorabrechnung war sie der schwächste Aufbau. Alte Links gehen über `ersatz` auf „Holzleisten einlagig“, das Datenblatt rechnet alte Links unverändert.
+  - Angeboten: Ohne Fassade, Schindel zweilagig (Voreinstellung), Schindel einlagig, Holzleisten einlagig. Die zweilagige Schindel bleibt bis zur WUFI-Prüfung.
+- **Höhe nur in vollen Lagen:** Der Regler stellt die **Wandhöhe** von 2,40 bis 4,80 m in 20-cm-Schritten ein, ohne Ausgleichslage. Die Raumhöhe ist Wandhöhe plus Deckenfuge (20 mm). Ältere Links mit freier Raumhöhe werden im Konfigurator auf volle Lagen abgerundet. Titel, Zusammenfassung, IFC und LV nennen die Wandhöhe. Wie ein größerer Spalt zur Decke geschlossen wird, zeigt der Konfigurator vorerst nicht.
+- **Wärmeschutz ohne Förderbezug:** Die Wand ist ein Neubauprodukt. GEG-Höchstwert und BEG-Einzelmaßnahme gelten für Änderungen im Bestand und werden nicht mehr genannt. Der U-Wert steht bei den Kennwerten (Steine, Wanddicke, U-Wert, Gewicht); im Reiter „Wärmeschutz“ steht, auf welchen U-Wert die Dämmstärke ausgelegt ist und dass das Gebäude den energetischen Nachweis führt. Die Auslegung bleibt U ≤ 0,20.
+- **Bedienung (Feedback Nico):**
+  - Regler mit `aria-label` und `aria-valuetext`; der Hinweis „Ziehen zum Drehen“ verschwindet nach der ersten Bedienung.
+  - Die Übersicht ist ruhiger, Details stehen im Datenblatt: 4 statt 8 Kennwerte, 3 statt 7 Punkte unter „So funktioniert's“, Stückliste eine Zeile je Gruppe, Rechenweg Wärmeschutz eingeklappt, Ansicht-Optionen unter „Mehr“, Aufbautexte in einem Satz.
+  - Das Eingabe-Panel ist auf dem Desktop höchstens so hoch wie die Vorschau: knappere Abstände und Schriften, kurze Kartentitel (`karte`), Hinweise in der Reglerzeile. Von mehreren Öffnungen zeigt nur die gerade bearbeitete Regler und Maße, die anderen sind eine Zeile.
+- **Datenblatt-Anfrage:** zwei getrennte Häkchen, Pflicht für das Datenblatt und freiwillig für den Kontaktwunsch; dieser steht in der Zusammenfassung an HubSpot (Details in `docs/HUBSPOT.md`).
+- **Gespeicherte Konfiguration:** Die letzte Konfiguration bleibt im Browser (`localStorage`); ein Link mit Parametern hat Vorrang, „Zurücksetzen“ stellt die Voreinstellung her.

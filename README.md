@@ -19,7 +19,7 @@ Dann <http://localhost:8000/> öffnen. Die Einbettung lässt sich unter <http://
 | Datei | Inhalt |
 |---|---|
 | `index.html`, `css/app.css` | Seite und CI (Grün #1FAA5F, Webfonts von sembla.de) |
-| `js/app.js` | Bedienung, Kennzahlen, Regeltexte, Konfiguration in der URL |
+| `js/app.js` | Bedienung, Kennzahlen, Regeltexte, Konfiguration in der URL und im Browser (`localStorage`) |
 | `js/wand.js` | Fachlogik: Rechenkern aufrufen, Öffnungen, UK-Achsen, Verbinder, Schraubenlänge |
 | `js/sembla-core.js`, `js/sembla-aufbau.js` | Rechenkern und Modul 2 (Verbinder, Latten) der [Planungs-Suite](https://github.com/p0lycare/SEMBLA-planning-suite), **unverändert** übernommen, nie von Hand ändern |
 | `js/rechenkern.version.json` | Herkunft der übernommenen Module (Commit, Prüfsumme, Datum) |
@@ -28,7 +28,7 @@ Dann <http://localhost:8000/> öffnen. Die Einbettung lässt sich unter <http://
 | `tools/obj-zu-json.mjs` | wandelt Bauteil-OBJs in diese Netze: `node tools/obj-zu-json.mjs ziel.json name=teil.obj …` |
 | `js/ansicht2d.js`, `js/modell3d.js` | 2D-Wandansicht (SVG) und 3D-Modell (three.js 0.160 vom CDN) |
 | `js/einbettung.js` | postMessage an sembla.de: Höhe, Formular, Ereignisse |
-| `js/waerme.js` | U-Wert nach DIN EN ISO 6946 und Auslegung der Dämmstärke auf GEG/BEG/EH 40 |
+| `js/waerme.js` | U-Wert nach DIN EN ISO 6946 und Auslegung der Dämmstärke auf einen festen U-Wert (Voreinstellung U ≤ 0,20) |
 | `js/inhalte.js` | Kennzahlen, Stückliste, Regeln, Wärmeschutz als HTML; gemeinsam für Konfigurator und Datenblatt |
 | `datenblatt.html`, `js/datenblatt.js` | druckfertiges Datenblatt („Als PDF speichern“), Link kommt per E-Mail |
 | `js/anfrage.js` | Datenblatt-Anfrage an HubSpot, Einrichtung in [`docs/HUBSPOT.md`](docs/HUBSPOT.md) |
@@ -40,6 +40,11 @@ Dann <http://localhost:8000/> öffnen. Die Einbettung lässt sich unter <http://
 ## Neue Fassade ergänzen
 
 In `data/aufbauten.json` unter `fassaden` einen Eintrag anlegen. Die Schichten laufen von der Steinoberfläche nach außen; `art` ist eine von `staender`, `feld`, `platte`, `latte_v`, `latte_h`, `halter`, `schindel`, `leiste_h`, `paneel`. Danach `npm test` laufen lassen, er prüft die Daten mit.
+
+- `name`: voller Name (Datenblatt, LV, Zusammenfassung); `karte`: kurzer Titel für die Auswahlkarte im Konfigurator.
+- `kurz`: ein Satz unter der Auswahl.
+- `freigegeben: false`: nicht wählbar, für ältere Links und Datenblätter aber weiter rechenbar.
+- `ersatz: "<id>"`: Nachfolger einer zurückgezogenen Variante. Der Konfigurator stellt alte Links darauf um und zeigt einen Hinweis; das Datenblatt rechnet die alte Variante unverändert.
 
 ## Rechenkern aktuell halten
 
