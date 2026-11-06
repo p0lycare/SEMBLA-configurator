@@ -81,7 +81,7 @@ export function teilBild(t, farben) {
       return holzQuerschnitt(58, 34, f(t.material));
     case "halter": return svg(`<path d="M50 25 H62 V63 H112 V75 H50 Z" fill="${f("alu")}" ${linie}/><circle cx="56" cy="35" r="2.5" fill="#FDFDFD" ${linie}/><circle cx="100" cy="69" r="2.5" fill="#FDFDFD" ${linie}/>`);
     case "feld": return platte(f(t.material), "daemmung");
-    case "platte": return t.material === "bahn" ? platte(f(t.material), "folie") : platte(f(t.material), t.material === "mineralwolle" || t.material.startsWith("holzfaser") ? "daemmung" : null);
+    case "platte": return t.material === "bahn" || t.material === "fassadenbahn" ? platte(f(t.material), "folie") : platte(f(t.material), t.material === "mineralwolle" || t.material.startsWith("holzfaser") ? "daemmung" : null);
     case "schindel": return svg(`<rect x="28" y="26" width="104" height="50" rx="2" fill="${f(t.material)}" ${linie}/><rect x="28" y="26" width="104" height="14" fill="#000" fill-opacity=".12"/><circle cx="44" cy="33" r="2.5" fill="#FDFDFD" ${linie}/><circle cx="116" cy="33" r="2.5" fill="#FDFDFD" ${linie}/>`);
     case "leiste_h": return svg(`<path d="M30 58 L42 42 H130 L118 58 Z" fill="${f(t.material)}" ${linie}/>`);
     case "paneel": {

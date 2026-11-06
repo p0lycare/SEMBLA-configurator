@@ -1,5 +1,5 @@
 // Oberfläche: Zustand, Bedienelemente, Kennzahlen, Regeln. Die Konfiguration steht in der URL
-// (?l=…&h=…), damit sich ein Stand teilen lässt.
+// (?l=…&h=…), damit sich ein Stand teilen lässt, und im localStorage, damit sie ein Neuladen übersteht.
 
 import { wirksameZwischenpunkte } from "./sembla-core.js";
 import { berechne, zusammenfassung, GRENZEN, OEFFNUNGEN, oeffnungsMasse, masseText } from "./wand.js";
@@ -19,8 +19,21 @@ if (!A) {
   throw new Error("aufbauten.json nicht geladen");
 }
 
+// Die letzte Konfiguration bleibt im Browser gespeichert. Ein geteilter Link mit Konfiguration hat
+// Vorrang; ohne Parameter in der URL gilt der gespeicherte Stand.
+const SPEICHER = "sembla-konfiguration";
+const KONFIG_PARAMETER = ["l", "h", "o", "f", "i", "w"];
+const speicher = {
+  lesen: () => { try { return JSON.parse(localStorage.getItem(SPEICHER) || "null"); } catch { return null; } },
+  schreiben: (p) => { try { localStorage.setItem(SPEICHER, JSON.stringify(p)); } catch { /* privat oder blockiert */ } },
+  loeschen: () => { try { localStorage.removeItem(SPEICHER); } catch { /* privat oder blockiert */ } },
+};
 const url = new URLSearchParams(location.search);
 if (url.get("compact") === "1" || eingebettet) document.documentElement.classList.add("kompakt");
+if (!KONFIG_PARAMETER.some((k) => url.has(k))) {
+  const gespeichert = speicher.lesen();
+  if (gespeichert) for (const k of KONFIG_PARAMETER) if (gespeichert[k] != null) url.set(k, gespeichert[k]);
+}
 
 const zustand = { ...zustandAusUrl(url), ansicht: "3d" };
 delete zustand.fest;   // gespeicherte Dämmstärken gelten nur im Datenblatt; hier wird neu ausgelegt
@@ -252,7 +265,17 @@ function aktualisieren() {
   Object.entries(urlParameter(zustand, r)).forEach(([a, b]) => p.set(a, b));
   p.delete("p");
   history.replaceState(null, "", `?${p}`);
+  speicher.schreiben(urlParameter(zustand, r));
 }
+
+// Zurücksetzen: gespeicherten Stand löschen und ohne Konfigurationsparameter neu laden.
+$("zuruecksetzen").onclick = () => {
+  speicher.loeschen();
+  const p = new URLSearchParams(location.search);
+  for (const k of [...KONFIG_PARAMETER, "p"]) p.delete(k);
+  ereignis("zuruecksetzen");
+  location.replace(`${location.pathname}${p.size ? `?${p}` : ""}`);
+};
 
 let teile = [];
 $("csv").onclick = () => {

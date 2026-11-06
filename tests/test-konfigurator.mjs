@@ -329,7 +329,7 @@ test("Holz-UK: Latten bis zum Rand, Traglatte an der Krone, Fassadenachsen ohne 
 
 test("Auswahl: nur freigegebene Varianten, Voreinstellung freigegeben", () => {
   const frei = (l) => l.filter((x) => x.freigegeben !== false).map((x) => x.id);
-  assert.deepEqual(frei(A.fassaden), ["sicht", "schindel", "holzleiste"]);
+  assert.deepEqual(frei(A.fassaden), ["sicht", "schindel", "holzleiste", "schindel_einlagig", "holzleiste_einlagig"]);
   assert.deepEqual(frei(A.innen), ["sicht", "trockenbau_putz"]);
   const z = zustandAusUrl(new URLSearchParams("f=terrakotta&i=lehm"));
   const a = aufbauWahl(A, z, { nurFreigegeben: true });
@@ -411,8 +411,31 @@ test("Feuchteschutz: Stein nicht als Dampfbremse angesetzt, verputzte Innenseite
   for (const f of ["schindel", "holzleiste"]) for (const i of ["trockenbau_putz", "lehm_putz", "sicht", "trockenbau"]) {
     const x = auslegen(fass(f), inn(i), A.waerme, 0.2);
     assert.ok(x.feuchte.tauwasserOk && x.erfuellt, `${f}/${i}`);
-    assert.equal(x.aufbau.schichten.some((s) => s.id === "dampfbremse"), !inn(i).luftdicht, `${f}/${i}`);
+    assert.equal(x.aufbau.schichten.some((s) => s.id === "dampfbremse"), !inn(i).luftdicht, `${f}/${i}`);  // zweilagige Varianten
   }
+});
+
+test("Einlagig gedämmte Holz-UK: eine Dämmlage, Dampfbremse nur ohne Innenputz, auf dem Stein", () => {
+  for (const id of ["schindel_einlagig", "holzleiste_einlagig"]) {
+    for (const i of ["trockenbau_putz", "sicht"]) {
+      const r = berechne({ laenge_mm: 6000, raumhoehe_mm: 2850, oeffnungen: [T, F], fassade: fass(id), innen: inn(i),
+        waerme: { kennwerte: A.waerme, ziel_U: 0.2 } });
+      const x = auslegen(fass(id), inn(i), A.waerme, 0.2);
+      assert.ok(x.erfuellt && x.feuchte.tauwasserOk && x.feuchte.ok, `${id}/${i}`);
+      const daemm = x.aufbau.schichten.filter((s) => s.lambda && s.art !== "staender");
+      assert.ok(daemm.length <= 2 && daemm.every((s) => s.art === "feld" || s.dicke <= 22), `${id}: eine Dämmlage, höchstens 22 mm Platte`);
+      // Dampfbremse immer auf dem Stein, auch mit Innenputz: robust gegen μ der Platte und die Fassadenbahn.
+      assert.equal(x.aufbau.schichten[0].id, "dampfbremse", `${id}/${i}`);
+      assert.ok(x.feuchte.bahn.ok && x.feuchte.bahn.verhaeltnis > 3 && x.feuchte.bahn.einbau, `${id}/${i}`);
+      assert.ok(r.schraube?.laenge_mm, `${id}: Schraubenlänge`);
+      const lv = lvDaten(r, r.fassade, inn(i)).titel.flatMap((t) => t.positionen);
+      assert.ok(!lv.some((p) => /nach der Gefachdämmung/.test(p.lang)), id);
+      if (id === "holzleiste_einlagig") assert.ok(lv.some((p) => /UV-stabil/.test(p.kurz)) && lv.some((p) => /über der Fassadenbahn/.test(p.lang)));
+    }
+  }
+  // Die Fassadenbahn außen zählt nicht als Dampfbremse.
+  const fe = auslegen(fass("holzleiste_einlagig"), inn("trockenbau_putz"), A.waerme, 0.2).feuchte;
+  assert.ok(/Dampfbremse/.test(fe.bahn && fe.glaser.lagen.find((l) => l.bahn).name));
 });
 
 console.log(`\n${n} Tests bestanden`);

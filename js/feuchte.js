@@ -17,7 +17,8 @@ export function taupunkt(theta, phi) {
   return x >= 0 ? 237.3 * x / (17.269 - x) : 265.5 * x / (21.875 - x);
 }
 
-const istBahn = (s) => s.material === "bahn";
+// Bahnen: Dampfbremse ("bahn") und diffusionsoffene Fassadenbahn; Dampfbremse ist nur die erste.
+const istBahn = (s) => s.material === "bahn" || s.material === "fassadenbahn";
 // Kapillar nicht wasseraufnahmefähig (DIN 4108-3, 5.2.2 c): Folien, Mineralwolle, Schaumkunststoffe.
 const nichtSaugend = (s) => istBahn(s) || s.kapillar === false;
 
@@ -34,7 +35,7 @@ function zonenListe(schichten) {
 /** Eine Zone im Gefach: Dämmung bzw. Platte; ohne Gefachstoff ruhende Luft zwischen Latten. */
 function gefachLage(zone) {
   const bahn = zone.find(istBahn);
-  if (bahn) return { name: bahn.name, R: 0, sd: bahn.sd, bahn: true, nichtSaugend: true };
+  if (bahn) return { name: bahn.name, R: 0, sd: bahn.sd, bahn: bahn.material === "bahn", nichtSaugend: true, einbau: bahn.einbau };
   const stoff = zone.find((s) => s.lambda && s.art !== "staender" && s.art !== "latte_v");
   if (stoff) return {
     name: stoff.name, R: stoff.dicke / 1000 / stoff.lambda, sd: (stoff.mu ?? 1) * stoff.dicke / 1000,
@@ -140,7 +141,7 @@ export function bahnTemperatur(lagen, f) {
   // Planungsregel: R außen / R innen mindestens `bahn_verhaeltnis_min` (1,5), nie weniger als die DIN-Grenze.
   const soll = Math.max(din, f.bahn_verhaeltnis_min || 0);
   const verhaeltnis = Raus / Rin;
-  return { theta, taupunkt: ts, verhaeltnis, verhaeltnis_din: din, verhaeltnis_min: soll, ok: verhaeltnis >= soll - 1e-9, R_innen: Rin, R_aussen: Raus };
+  return { einbau: lagen[k].einbau, theta, taupunkt: ts, verhaeltnis, verhaeltnis_din: din, verhaeltnis_min: soll, ok: verhaeltnis >= soll - 1e-9, R_innen: Rin, R_aussen: Raus };
 }
 
 /**

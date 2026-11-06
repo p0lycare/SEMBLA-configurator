@@ -71,7 +71,11 @@ function position(t, a, seite, flaeche, teile) {
           lang: `${n}, zwischen den Latten passgenau eingebaut. Bemessungswert der Wärmeleitfähigkeit nach DIN 4108-4 λ ≤ 0,${wls(a)} W/(mK).` };
     case "platte":
       if (t.material === "bahn") return { kurz: "Dampfbremse sd ≥ 2 m, luftdicht verklebt", menge: t.menge, einheit: "m²",
-        lang: "Dampfbremse sd ≥ 2 m, nach der Gefachdämmung auf die Unterkonstruktion getackert; Stöße, Ränder, Anschlüsse und Durchdringungen luftdicht nach DIN 4108-7 verklebt. Sie ist die luftdichte Ebene." };
+        lang: t.einbau
+          ? "Dampfbremse sd ≥ 2 m, vollflächig auf den Steinen unter der Unterkonstruktion; Stöße, Ränder, Anschlüsse und Durchdringungen der Verbinder luftdicht nach DIN 4108-7 verklebt bzw. mit Manschetten abgedichtet. Sie ist die luftdichte Ebene."
+          : "Dampfbremse sd ≥ 2 m, nach der Gefachdämmung auf die Unterkonstruktion getackert; Stöße, Ränder, Anschlüsse und Durchdringungen luftdicht nach DIN 4108-7 verklebt. Sie ist die luftdichte Ebene." };
+      if (t.material === "fassadenbahn") return { kurz: "Fassadenbahn UV-stabil, diffusionsoffen", menge: t.menge, einheit: "m²",
+        lang: "Fassadenbahn diffusionsoffen sd ≤ 0,10 m, dauerhaft UV-stabil für Fassaden mit offenen Fugen, auf der Unterkonstruktion befestigt, Stöße überlappt und verklebt, winddicht. Wind- und Wetterschutz der Dämmung." };
       if (/putz/.test(t.material)) {
         const gips = t.material === "gipsputz";
         return { kurz: `${p}, vollflächig`, menge: t.menge, einheit: "m²",
@@ -89,7 +93,7 @@ function position(t, a, seite, flaeche, teile) {
       const schraube = teile.find((x) => x.symbol === "schraube" && x.name.startsWith("Holzbauschraube"));
       const luft = /Hinterlüftung (\d+) mm/.exec(n);
       return { kurz: `Konterlattung ${p.replace("Konterlatte ", "")}`, menge: t.menge, einheit: "lfm",
-        lang: `Nadelholz, technisch getrocknet, über der Holzfaserplatte ins KVH verschraubt${schraube ? ` (${schraube.name}, etwa alle 30 cm, Spitze mindestens 4 mm vor dem Stein)` : ""}; bildet die Hinterlüftungsebene${luft ? ` ${luft[1]} mm` : ""}.` };
+        lang: `Nadelholz, technisch getrocknet, über der ${a.schichten.some((s) => s.material === "fassadenbahn") ? "Fassadenbahn" : "Holzfaserplatte"} ins KVH verschraubt${schraube ? ` (${schraube.name}, etwa alle 30 cm, Spitze mindestens 4 mm vor dem Stein)` : ""}; bildet die Hinterlüftungsebene${luft ? ` ${luft[1]} mm` : ""}.` };
     }
     case "latte_h": {
       const abstand = /Abstand (\d+)/.exec(n);

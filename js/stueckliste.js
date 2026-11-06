@@ -89,7 +89,7 @@ function ausbauTeile(r, aufbau, ver, seite) {
 
   const segLaenge = ver.segmente.reduce((a, s) => a + s.y1 - s.y0, 0);
   for (const s of schichtLagen(aufbau.schichten)) {
-    const t = { name: s.name, material: s.material, art: s.art, ca: true };
+    const t = { name: s.name, material: s.material, art: s.art, ca: true, ...(s.einbau ? { einbau: s.einbau } : {}) };
     switch (s.art) {
       case "staender":
       case "latte_v":

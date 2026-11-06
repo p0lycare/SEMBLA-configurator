@@ -252,6 +252,211 @@
       "freigegeben": true
     },
     {
+      "id": "schindel_einlagig",
+      "name": "Keramik-Schindel auf Holz-UK, einlagig gedämmt",
+      "kurz": "Kleinformatige Keramik-Schindeln auf Holzlattung. Eine Dämmlage: Mineralwolle im Gefach zwischen den KVH, außen nur eine dünne winddichte Holzfaserplatte, innen die Dampfbremse auf dem Stein.",
+      "linie": "Holz-UK einlagig mit Mineralwolle",
+      "uk": "holz",
+      "achsraster_mm": 625,
+      "flaechengewicht_kg_m2": 58,
+      "rueckbau": "Schindeln abschrauben, Lattung und Holzfaserplatte lösen, Mineralwolle und KVH sortenrein abnehmen.",
+      "schraube": {
+        "bezeichnung": "Holzbauschraube Konterlatte → KVH",
+        "durchmesser_mm": 6,
+        "durch": [
+          "konterlatte",
+          "unterdeckplatte"
+        ],
+        "in": "kvh",
+        "einbindung_min_mm": 50,
+        "abstand_stein_min_mm": 4,
+        "lambda": 50,
+        "abstand_mm": 300
+      },
+      "schichten": [
+        {
+          "id": "dampfbremse",
+          "name": "Dampfbremse auf dem Stein, luftdicht verklebt",
+          "art": "platte",
+          "dicke": 1,
+          "material": "bahn",
+          "sd": 2,
+          "einbau": "Die Dampfbremse liegt vollflächig auf den Steinen, unter dem KVH, auf der warmen Seite der Dämmung. Sie wird an Stößen, Rändern und Anschlüssen luftdicht verklebt; die Verbinder durchdringen sie und werden mit Manschette oder Klebeband abgedichtet. Sie bleibt auch bei verputzter Innenseite, damit der Tauwasserschutz nicht von der Außenplatte abhängt."
+        },
+        {
+          "id": "kvh",
+          "name": "KVH 60 × {d} auf FA-Verbindern",
+          "art": "staender",
+          "dicke": 60,
+          "breite": 60,
+          "material": "holz",
+          "lambda": 0.13
+        },
+        {
+          "id": "daemmung",
+          "name": "Mineralwolle WLS 032 {d} mm",
+          "art": "feld",
+          "dicke": 60,
+          "parallel": true,
+          "material": "mineralwolle",
+          "lambda": 0.032,
+          "mu": 1,
+          "kapillar": false
+        },
+        {
+          "id": "unterdeckplatte",
+          "name": "Holzfaser-Unterdeckplatte 22 mm, winddicht",
+          "art": "platte",
+          "dicke": 22,
+          "material": "holzfaser_dunkel",
+          "lambda": 0.047,
+          "mu": 3,
+          "rho": 240,
+          "holz_feuchte_max": 0.03
+        },
+        {
+          "id": "konterlatte",
+          "name": "Konterlatte 24 × 50, Hinterlüftung 24 mm",
+          "art": "latte_v",
+          "dicke": 24,
+          "breite": 50,
+          "material": "holz"
+        },
+        {
+          "id": "traglatte",
+          "name": "Traglatte 24 × 48, Abstand 150",
+          "art": "latte_h",
+          "dicke": 24,
+          "breite": 48,
+          "abstand": 150,
+          "material": "holz"
+        },
+        {
+          "id": "bekleidung",
+          "name": "Keramik-Schindel 445 × 215, Deckung 150",
+          "art": "schindel",
+          "dicke": 35,
+          "breite": 445,
+          "hoehe": 215,
+          "deckung": 150,
+          "material": "keramik"
+        }
+      ],
+      "hinterlueftet": true,
+      "daemmstufen": {
+        "schichten": {
+          "kvh": 0,
+          "daemmung": 0
+        },
+        "dicken": [
+          120,
+          140,
+          160,
+          180,
+          200,
+          240
+        ]
+      },
+      "belueftung_ab": "konterlatte",
+      "freigegeben": true
+    },
+    {
+      "id": "holzleiste_einlagig",
+      "name": "Holzleisten auf Holz-UK, einlagig gedämmt",
+      "kurz": "Horizontale Rhombus-Leisten mit offener Fuge auf Konterlattung. Eine Dämmlage: Mineralwolle im Gefach zwischen den KVH, außen nur eine UV-stabile Fassadenbahn, innen die Dampfbremse auf dem Stein.",
+      "linie": "Holz-UK einlagig mit Mineralwolle",
+      "uk": "holz",
+      "achsraster_mm": 625,
+      "flaechengewicht_kg_m2": 28,
+      "rueckbau": "Leisten aus den Clips lösen, Lattung abschrauben, Fassadenbahn abnehmen, Mineralwolle, KVH und Dampfbremse sortenrein abnehmen.",
+      "schraube": {
+        "bezeichnung": "Holzbauschraube Konterlatte → KVH",
+        "durchmesser_mm": 6,
+        "durch": [
+          "konterlatte",
+          "fassadenbahn"
+        ],
+        "in": "kvh",
+        "einbindung_min_mm": 50,
+        "abstand_stein_min_mm": 4,
+        "lambda": 50,
+        "abstand_mm": 300
+      },
+      "schichten": [
+        {
+          "id": "dampfbremse",
+          "name": "Dampfbremse auf dem Stein, luftdicht verklebt",
+          "art": "platte",
+          "dicke": 1,
+          "material": "bahn",
+          "sd": 2,
+          "einbau": "Die Dampfbremse liegt vollflächig auf den Steinen, unter dem KVH, auf der warmen Seite der Dämmung. Sie wird an Stößen, Rändern und Anschlüssen luftdicht verklebt; die Verbinder durchdringen sie und werden mit Manschette oder Klebeband abgedichtet. Sie bleibt auch bei verputzter Innenseite, damit der Tauwasserschutz nicht von der Außenplatte abhängt."
+        },
+        {
+          "id": "kvh",
+          "name": "KVH 60 × {d} auf FA-Verbindern",
+          "art": "staender",
+          "dicke": 60,
+          "breite": 60,
+          "material": "holz",
+          "lambda": 0.13
+        },
+        {
+          "id": "daemmung",
+          "name": "Mineralwolle WLS 032 {d} mm",
+          "art": "feld",
+          "dicke": 60,
+          "parallel": true,
+          "material": "mineralwolle",
+          "lambda": 0.032,
+          "mu": 1,
+          "kapillar": false
+        },
+        {
+          "id": "fassadenbahn",
+          "name": "Fassadenbahn UV-stabil, sd ≤ 0,10 m, winddicht",
+          "art": "platte",
+          "dicke": 1,
+          "material": "fassadenbahn",
+          "sd": 0.1
+        },
+        {
+          "id": "konterlatte",
+          "name": "Konterlatte 24 × 50, Hinterlüftung 24 mm",
+          "art": "latte_v",
+          "dicke": 24,
+          "breite": 50,
+          "material": "holz"
+        },
+        {
+          "id": "bekleidung",
+          "name": "Rhombus-Leiste 27 × 68, Fuge 12",
+          "art": "leiste_h",
+          "dicke": 27,
+          "hoehe": 68,
+          "fuge": 12,
+          "material": "laerche"
+        }
+      ],
+      "hinterlueftet": true,
+      "daemmstufen": {
+        "schichten": {
+          "kvh": 0,
+          "daemmung": 0
+        },
+        "dicken": [
+          120,
+          140,
+          160,
+          180,
+          200,
+          240
+        ]
+      },
+      "belueftung_ab": "konterlatte",
+      "freigegeben": true
+    },
+    {
       "id": "terrakotta",
       "name": "Terrakotta-Paneel auf Alu-UK",
       "kurz": "Stranggepresste Ziegelpaneele in Klammern auf Aluminium-Unterkonstruktion, gedämmt mit Mineralwolle.",
@@ -653,7 +858,8 @@
     "stahl": "#6B747A",
     "verbinder": "#1FAA5F",
     "lehmputz": "#CDB48C",
-    "gipsputz": "#F3F2EE"
+    "gipsputz": "#F3F2EE",
+    "fassadenbahn": "#3B3F42"
   },
   "verbinder": {
     "_hinweis": "Vorbemessung der Verbinder (FA und IA) mit Bemessungswerten F_Rd je Lastrichtung, Verbinder in Steinmitte. Der FA-Verbinder wird vorerst wie der IA-Verbinder angesetzt. Lastrichtungen: Zug = senkrecht zur Wand, Querlast parallel = entlang der senkrechten Nut (Eigengewicht), Querlast senkrecht = quer zur Nut. Interaktion Zug + Querlast (β_N)^1,5 + (β_V)^1,5 ≤ 1 wie bei Ankern (DIN EN 1992-4). Zug hält der Verbinder formschlüssig; entlang der Nut nur über die Klemmung, die die Schraube zum Holz mitspannt und die beim Schwinden des Holzes nachlässt. Deshalb tragen Auflager das Eigengewicht (außen Fußauflager und Auflager über Öffnungen, innen Schwelle). Herleitung in der SEMBLA Planning Suite.",
