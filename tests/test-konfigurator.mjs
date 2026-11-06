@@ -329,7 +329,7 @@ test("Holz-UK: Latten bis zum Rand, Traglatte an der Krone, Fassadenachsen ohne 
 
 test("Auswahl: nur freigegebene Varianten, Voreinstellung freigegeben", () => {
   const frei = (l) => l.filter((x) => x.freigegeben !== false).map((x) => x.id);
-  assert.deepEqual(frei(A.fassaden), ["sicht", "schindel", "holzleiste", "schindel_einlagig", "holzleiste_einlagig"]);
+  assert.deepEqual(frei(A.fassaden), ["sicht", "schindel", "schindel_einlagig", "holzleiste_einlagig"]);
   assert.deepEqual(frei(A.innen), ["sicht", "trockenbau_putz"]);
   const z = zustandAusUrl(new URLSearchParams("f=terrakotta&i=lehm"));
   const a = aufbauWahl(A, z, { nurFreigegeben: true });
@@ -337,6 +337,14 @@ test("Auswahl: nur freigegebene Varianten, Voreinstellung freigegeben", () => {
   assert.deepEqual(z.ersetzt, ["fassade", "innen"]);
   // Ältere Datenblatt-Links mit nicht freigegebenen Varianten bleiben rechenbar.
   assert.equal(aufbauWahl(A, zustandAusUrl(new URLSearchParams("f=terrakotta&i=lehm"))).roh.id, "terrakotta");
+});
+
+test("Zweilagige Holzleiste: im Konfigurator auf die einlagige umgestellt, im Datenblatt unverändert", () => {
+  const z = zustandAusUrl(new URLSearchParams("f=holzleiste"));
+  assert.equal(aufbauWahl(A, z, { nurFreigegeben: true }).roh.id, "holzleiste_einlagig");
+  assert.deepEqual(z.umgestellt.map(([a, n]) => [a.id, n.id]), [["holzleiste", "holzleiste_einlagig"]]);
+  assert.deepEqual(z.ersetzt, []);
+  assert.equal(aufbauWahl(A, zustandAusUrl(new URLSearchParams("f=holzleiste"))).roh.id, "holzleiste");
 });
 
 test("Holz-UK: jede Dämmkombination hat eine Schraube; verputzt ohne Dampfbremse, Installationsebene gedämmt", () => {

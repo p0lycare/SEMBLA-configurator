@@ -249,7 +249,8 @@
         }
       },
       "belueftung_ab": "konterlatte",
-      "freigegeben": true
+      "freigegeben": false,
+      "ersatz": "holzleiste_einlagig"
     },
     {
       "id": "schindel_einlagig",

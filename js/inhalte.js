@@ -83,11 +83,17 @@ export function datenblattParameter(zustand, r) {
 /**
  * Aufbauten der Wahl. Frühere Kennungen werden umgeschrieben; unbekannte fallen auf die
  * Voreinstellung zurück und stehen in `zustand.ersetzt`, damit die Seite darauf hinweisen kann.
+ * Zurückgezogene Varianten mit `ersatz` gehen im Konfigurator auf ihren Nachfolger über
+ * (`zustand.umgestellt`: [alt, neu]); das Datenblatt rechnet sie unverändert weiter.
  */
 export function aufbauWahl(A, zustand, { nurFreigegeben = false } = {}) {
-  const ersetzt = [];
+  const ersetzt = [], umgestellt = [];
   const waehle = (liste, art, id) => {
-    const treffer = liste.find((x) => x.id === (ALIAS[art][id] || id) && (!nurFreigegeben || x.freigegeben !== false));
+    const gefunden = liste.find((x) => x.id === (ALIAS[art][id] || id));
+    const nachfolger = nurFreigegeben && gefunden?.freigegeben === false && gefunden.ersatz
+      && liste.find((x) => x.id === gefunden.ersatz && x.freigegeben !== false);
+    if (nachfolger) { umgestellt.push([gefunden, nachfolger]); return nachfolger; }
+    const treffer = gefunden && (!nurFreigegeben || gefunden.freigegeben !== false) ? gefunden : null;
     if (treffer) return treffer;
     ersetzt.push(art);
     return liste.find((x) => x.id === STANDARD[art]) || liste.find((x) => x.freigegeben !== false) || liste[0];
@@ -95,7 +101,7 @@ export function aufbauWahl(A, zustand, { nurFreigegeben = false } = {}) {
   const roh = waehle(A.fassaden, "fassade", zustand.fassade);
   const innen = waehle(A.innen, "innen", zustand.innen);
   const ziel = waehle(A.waerme.ziele, "ziel", zustand.ziel);
-  Object.assign(zustand, { fassade: roh.id, innen: innen.id, ziel: ziel.id, ersetzt });
+  Object.assign(zustand, { fassade: roh.id, innen: innen.id, ziel: ziel.id, ersetzt, umgestellt });
   // Feste Dämmstärken nur, wenn sie zu den Stufen dieser Fassade passen.
   const st = roh.daemmstufen;
   const fest = zustand.fest && st && st.dicken.includes(zustand.fest.d)

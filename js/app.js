@@ -38,6 +38,8 @@ if (!KONFIG_PARAMETER.some((k) => url.has(k))) {
 const zustand = { ...zustandAusUrl(url), ansicht: "3d" };
 delete zustand.fest;   // gespeicherte Dämmstärken gelten nur im Datenblatt; hier wird neu ausgelegt
 let ergebnis = null;
+let linkHinweise = null;
+const wahlKennung = () => `${zustand.fassade}|${zustand.innen}|${zustand.ziel}`;
 
 // ---------- 3D (verzögert geladen; ohne WebGL bleibt die 2D-Ansicht) ----------
 let modell = null;
@@ -268,7 +270,15 @@ function aktualisieren() {
   $("stueckliste").innerHTML = stuecklisteHtml(teile, A.materialien);
   $("regeln").innerHTML = regelnHtml(r, innen, true, { kurz: true });
   $("verwendbarkeit").textContent = verwendbarkeitText(r);
-  if (zustand.ersetzt.length) r.hinweise.unshift("Der Link enthielt eine Variante, die der Konfigurator derzeit nicht anbietet. Sie wurde durch die Voreinstellung ersetzt.");
+  // Hinweise zum Link gelten, bis eine andere Variante gewählt wird (das Nachladen des 3D-Modells zeichnet neu).
+  if (!linkHinweise) linkHinweise = {
+    wahl: wahlKennung(),
+    texte: [
+      ...zustand.umgestellt.map(([alt, neu]) => `„${alt.name}“ bietet der Konfigurator nicht mehr an. Die Wand zeigt stattdessen „${neu.name}“.`),
+      ...(zustand.ersetzt.length ? ["Der Link enthielt eine Variante, die der Konfigurator derzeit nicht anbietet. Sie wurde durch die Voreinstellung ersetzt."] : []),
+    ],
+  };
+  if (linkHinweise.wahl === wahlKennung()) r.hinweise.unshift(...linkHinweise.texte);
   $("hinweise").innerHTML = hinweiseHtml(r);
 
   zeichne($("zeichnung"), r);
