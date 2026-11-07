@@ -9,6 +9,7 @@ import { stueckliste, alsCsv } from "../js/stueckliste.js";
 import { auslegen, uWert, mitDaemmung } from "../js/waerme.js";
 import { feuchteschutz, glaserSchichten, ps, taupunkt } from "../js/feuchte.js";
 import { wandAlsIfc } from "../js/export-ifc.js";
+import { wandaufbau, wandaufbauAusLink, FORMAT } from "../js/export-hygro.js";
 import { traglattenReihen } from "../js/aufbau-geometrie.js";
 import { freieHoehen, nachweis } from "../js/verbinder.js";
 import { wandAlsDxf } from "../js/export-dxf.js";
@@ -453,6 +454,39 @@ test("Konfigurator-Höhen (Wandhöhe 2,40–4,80 m in 20-cm-Schritten): nur voll
     assert.equal(r.kennzahlen.ausgleich_mm, 0);
     assert.equal(r.kennzahlen.lagen, H / 200);
   }
+});
+
+test("Wandaufbau für die Feuchte-App: Gefachschnitt von innen nach außen, Ende an der Belüftungsebene", () => {
+  // V1 der Aufgabe Holz-UK: zweilagig mit Innenputz, die Dampfbremse entfällt.
+  const v1 = wandaufbauAusLink(A, "https://konfigurator.sembla.de/datenblatt.html?f=schindel&i=trockenbau_putz&dd=120&da=60&v=6");
+  assert.equal(v1.format, FORMAT);
+  assert.deepEqual(v1.schichten.map((s) => [s.material, s.dicke_mm]),
+    [["gipsputz", 10], ["gipsfaser", 12.5], ["mineralwolle", 27], ["stein", 125], ["mineralwolle", 120], ["holzfaser_dunkel", 60]]);
+  assert.deepEqual(v1.entfallen, ["dampfbremse"]);
+  assert.equal(v1.aussen, "hinterlueftet");
+  assert.equal(v1.schichten[4].rolle, "gefach");
+  assert.equal(v1.schichten[2].rolle, "installationsebene");
+  // Ohne Innenputz bleibt die Dampfbremse zwischen den Dämmlagen.
+  const ohne = wandaufbau(A, { fassade: "schindel", innen: "trockenbau", d: 120, da: 60 });
+  assert.deepEqual(ohne.schichten.map((s) => s.material).slice(-3), ["mineralwolle", "bahn", "holzfaser_dunkel"]);
+  assert.equal(ohne.schichten.at(-2).sd, 2);
+  // Lattenebene ohne Dämmung ist ruhende Luft.
+  assert.equal(ohne.schichten[1].material, "luft");
+  // Offene Fugen der Holzleisten: offene Schalung, Fassadenbahn als letzte Schicht.
+  const v3 = wandaufbau(A, { fassade: "holzleiste_einlagig", innen: "trockenbau_putz", d: 160 });
+  assert.equal(v3.aussen, "offene_schalung");
+  assert.deepEqual(v3.schichten.slice(-3).map((s) => s.material), ["bahn", "mineralwolle", "fassadenbahn"]);
+  // Ohne d legt der Konfigurator aus wie auf der Seite.
+  const aus = wandaufbau(A, { fassade: "schindel_einlagig", innen: "trockenbau_putz" });
+  assert.equal(aus.konfiguration.daemmung_mm, auslegen(fass("schindel_einlagig"), inn("trockenbau_putz"), A.waerme, 0.2).daemmung_mm);
+  // Alles, was der Konfigurator anbietet, lässt sich übergeben; unpassende Eingaben werden abgelehnt.
+  for (const f of A.fassaden.filter((x) => x.freigegeben !== false))
+    for (const i of A.innen.filter((x) => x.freigegeben !== false)) {
+      const w = wandaufbau(A, { fassade: f.id, innen: i.id });
+      assert.ok(w.schichten.some((s) => s.material === "stein") && w.schichten.every((s) => s.dicke_mm > 0), `${f.id}/${i.id}`);
+    }
+  assert.throws(() => wandaufbau(A, { fassade: "gibtsnicht", innen: "trockenbau_putz" }), /unbekannte Auswahl/);
+  assert.throws(() => wandaufbau(A, { fassade: "schindel", innen: "trockenbau_putz", d: 123 }), /passt nicht/);
 });
 
 console.log(`\n${n} Tests bestanden`);
