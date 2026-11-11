@@ -304,6 +304,12 @@ export function erstelle(canvas) {
     const flur = new THREE.Mesh(new THREE.BoxGeometry(L + 3000, 40, 4000), mat("#E4E4DF", { roughness: 1 }));
     flur.position.set(L / 2, -30, -THICK / 2);
     welt.add(steine, spann, einlege, verb, fGruppe, iGruppe, flur);
+    // Kollision: gewünschte Lage der zuletzt bewegten Öffnung als roter, durchscheinender Kasten.
+    const ko = r.kollision;
+    if (ko && w.courses[ko.l0] && w.courses[ko.l1 - 1]) {
+      welt.add(quader([{ x0: ko.x0, x1: ko.x1, y0: w.courses[ko.l0].unterkante_mm, y1: w.courses[ko.l1 - 1].oberkante_mm, z0: -THICK - 420, z1: 420 }],
+        mat("#D0342C", { transparent: true, opacity: 0.35, depthWrite: false })));
+    }
 
     // Ausbauschichten in Rückbau-Reihenfolge: außen zuerst die äußerste
     const reihenfolge = [...aussen, ...innenG].sort((a, b) => b.userData.tiefe - a.userData.tiefe);

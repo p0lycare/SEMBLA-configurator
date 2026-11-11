@@ -54,6 +54,13 @@ export function zeichne(el, r, { seite = "aussen", minHoehe = 0 } = {}) {
       + `fill="#FDFDFD" stroke="#5E5E5E" stroke-width="6" stroke-dasharray="30 20"/>`);
   }
 
+  // Gewünschte, aber nicht baubare Lage der zuletzt bewegten Öffnung (Kollision, app.js)
+  const ko = r.kollision, kc = ko && w.courses[ko.l0] && w.courses[ko.l1 - 1];
+  if (kc) {
+    const y0 = w.courses[ko.l0].unterkante_mm, y1 = w.courses[ko.l1 - 1].oberkante_mm;
+    teile.push(`<rect x="${ko.x0}" y="${Y(y1)}" width="${ko.x1 - ko.x0}" height="${y1 - y0}" fill="#D0342C" fill-opacity=".22" stroke="#D0342C" stroke-width="14" stroke-dasharray="40 24"/>`);
+  }
+
   // Spannachsen (Segmente)
   for (const col of w.tension_columns) {
     for (const sg of col.segments) {

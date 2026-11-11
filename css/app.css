@@ -47,6 +47,9 @@ button { font: inherit; color: inherit; }
 .oeffnung-zeile.zu [data-pos], .oeffnung-zeile.zu .masse-wahl { display: none; }
 .oeffnung-zeile .masse-wahl { display: flex; flex-wrap: wrap; gap: 8px 14px; }
 .oeffnung-zeile .mass { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text2); }
+.oeffnung-zeile .mass input { font: inherit; color: var(--text); background: var(--grund); border: 1px solid var(--linie); border-radius: 6px; padding: 2px 4px; width: 5.2em; }
+.oeffnung-zeile .kollision { margin: 2px 0 0; font-size: 13px; color: #A3241D; }
+.oeffnung-zeile.zu .kollision { display: none; }
 .oeffnung-zeile .mass select { font: inherit; color: var(--text); background: var(--grund); border: 1px solid var(--linie); border-radius: 6px; padding: 2px 4px; }
 .entfernen { cursor: pointer; width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--rand); background: var(--grund); font-size: 18px; line-height: 1; }
 .entfernen:focus-visible { outline: 2px solid var(--gruen); outline-offset: 2px; }

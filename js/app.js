@@ -67,7 +67,7 @@ zustand.raumhoehe_mm = wandhoehe(zustand.raumhoehe_mm) + DECKENFUGE_MM;
 $("hoehe").min = WAND.min; $("hoehe").max = WAND.max; $("hoehe").step = LAGE;
 $("hoehe").value = zustand.raumhoehe_mm - DECKENFUGE_MM;
 $("laenge").min = GRENZEN.laengeMin; $("laenge").max = GRENZEN.laengeMax;
-$("laenge").oninput = (e) => { zustand.laenge_mm = +e.target.value; planen(); };
+$("laenge").oninput = (e) => { zustand.laenge_mm = +e.target.value; kollision = null; planen(); };
 $("hoehe").oninput = (e) => { zustand.raumhoehe_mm = +e.target.value + DECKENFUGE_MM; planen(); };
 const meter = (mm) => `${de(mm / 1000, Math.round(mm) % 10 ? 3 : 2)} Meter`;
 
@@ -82,6 +82,23 @@ function masseAuswahl(o, i) {
   }).join("");
 }
 let listenSchluessel = "";
+// Kollision (Feedback Felix 1.6): Die bewegte Öffnung passt nicht an die gewünschte Stelle und rastet
+// woandershin. {i, wunsch, gesetzt, grund, x0, x1, l0, l1} oder null; gezeigt in der Zeile, als
+// Hinweis unter der Vorschau und als roter Kasten in 2D und 3D, bis die nächste Eingabe passt.
+let kollision = null, bewegt = false;
+/** Warum die Öffnung i nicht ab Raster `wunsch` sitzen kann; null, wenn sie nur im Steinverband einrastet. */
+function kollisionsGrund(r, i, wunsch) {
+  const o = zustand.oeffnungen[i], b = oeffnungsMasse(o).b, N = r.w.length_mm / 125;
+  if (wunsch < 2 || wunsch + b > N - 2) return "zu nah am Wandende (mindestens 25 cm Wand)";
+  const name = (j) => { const a = zustand.oeffnungen[j].art, nr = zustand.oeffnungen.slice(0, j + 1).filter((x) => x.art === a).length;
+    return `${OEFFNUNGEN[a].name}${zustand.oeffnungen.filter((x) => x.art === a).length > 1 || a === "fenster" ? ` ${nr}` : ""}`; };
+  const andere = r.oeffnungen.map((x, j) => ({ x, j })).filter(({ x, j }) => x && j !== i && x.g0 < wunsch + b + 2 && x.g1 > wunsch - 2);
+  const namen = (l) => l.map(({ j }) => name(j)).join(" und ");
+  const ueber = andere.filter(({ x }) => x.g0 < wunsch + b && x.g1 > wunsch);
+  if (ueber.length) return `überschneidet sich mit ${namen(ueber)}`;
+  if (andere.length) return `zu nah an ${namen(andere)} (dazwischen mindestens 25 cm Wand)`;
+  return null;   // nur Einrasten im Steinverband: normales Raster, keine Kollision
+}
 // Nur eine Öffnung zeigt Regler und Maße, die übrigen sind eine Zeile (Klick auf den Titel klappt sie auf).
 let offen = 0;
 function oeffnungenZeichnen(r) {
@@ -99,20 +116,29 @@ function oeffnungenZeichnen(r) {
         <span class="zeile"><button type="button" class="oeffnung-titel" data-auf="${i}"><b>${titel(i)}</b><span class="klein mono" data-info></span></button>
           <button type="button" class="entfernen" data-weg="${i}" aria-label="${titel(i)} entfernen">×</button></span>
         <input type="range" min="0" max="${N - oeffnungsMasse(o).b}" step="1" data-pos="${i}" aria-label="Position ${titel(i)}, Abstand vom linken Wandende">
-        <span class="masse-wahl">${masseAuswahl(o, i)}</span>
+        <span class="masse-wahl"><label class="mass">ab<input type="text" inputmode="decimal" data-ab="${i}" size="5" aria-label="Position ${titel(i)} in Metern vom linken Wandende"> m</label>${masseAuswahl(o, i)}</span>
+        <p class="kollision" data-kollision hidden></p>
       </div>`).join("");
     liste.querySelectorAll("[data-pos]").forEach((el) => (el.oninput = () => {
       const i = +el.dataset.pos;
-      zustand.oeffnungen[i].pos = +el.value; zustand.aktiv = i; planen();
+      zustand.oeffnungen[i].pos = +el.value; zustand.aktiv = i; bewegt = true; planen();
+    }));
+    // Position als Zahl (Feedback Felix 1.5): Meter vom linken Wandende, auf 12,5 cm gerundet.
+    liste.querySelectorAll("[data-ab]").forEach((el) => (el.onchange = () => {
+      const i = +el.dataset.ab, wert = parseFloat(String(el.value).replace(",", "."));
+      if (!Number.isFinite(wert)) return;
+      zustand.oeffnungen[i].pos = Math.max(0, Math.round(wert * 1000 / 125)); zustand.aktiv = i; bewegt = true;
+      ereignis("oeffnung_position", { art: zustand.oeffnungen[i].art });
+      planen();
     }));
     liste.querySelectorAll("[data-mass]").forEach((el) => (el.onchange = () => {
       const i = +el.dataset.i;
-      zustand.oeffnungen[i][el.dataset.mass] = +el.value; zustand.aktiv = i;
+      zustand.oeffnungen[i][el.dataset.mass] = +el.value; zustand.aktiv = i; bewegt = true;
       ereignis("oeffnung_mass", { art: zustand.oeffnungen[i].art, [el.dataset.mass]: +el.value });
       planen();
     }));
     liste.querySelectorAll("[data-weg]").forEach((el) => (el.onclick = () => {
-      zustand.oeffnungen.splice(+el.dataset.weg, 1); zustand.aktiv = -1; offen = zustand.oeffnungen.length - 1; planen();
+      zustand.oeffnungen.splice(+el.dataset.weg, 1); zustand.aktiv = -1; kollision = null; offen = zustand.oeffnungen.length - 1; planen();
     }));
     liste.querySelectorAll("[data-auf]").forEach((el) => (el.onclick = () => { offen = +el.dataset.auf; planen(); }));
   }
@@ -128,6 +154,19 @@ function oeffnungenZeichnen(r) {
       ? `${masseText(o)} · ab ${mRaster(res.g0 * 125)}`
       : zuHoch ? `${masseText(o)} · zu hoch für die Raumhöhe` : `${masseText(o)} · passt nicht in die Wand`;
     zeile.querySelectorAll("[data-mass]").forEach((el) => (el.value = ms[el.dataset.mass]));
+    if (bewegt && i === zustand.aktiv) {
+      const wunsch = Number.isFinite(o.pos) ? o.pos : null;
+      const grund = wunsch !== null && (!res || res.g0 !== wunsch) && !zuHoch ? kollisionsGrund(r, i, wunsch) : null;
+      kollision = grund
+        ? { i, wunsch, gesetzt: res ? res.g0 : null, grund, x0: wunsch * 125, x1: (wunsch + ms.b) * 125, l0: ms.u, l1: ms.u + ms.h }
+        : null;
+    }
+    const k = kollision && kollision.i === i ? kollision : null;
+    const kz = zeile.querySelector("[data-kollision]");
+    kz.hidden = !k;
+    if (k) kz.textContent = `Ab ${mRaster(k.wunsch * 125)} geht nicht: ${k.grund}. ${k.gesetzt !== null ? `Gesetzt ab ${mRaster(k.gesetzt * 125)}.` : ""}`;
+    const ab = zeile.querySelector("[data-ab]");
+    if (res && document.activeElement !== ab) ab.value = de(res.g0 * 0.125, (res.g0 * 125) % 10 ? 3 : 2);
     const regler = zeile.querySelector("[data-pos]");
     regler.max = N - ms.b;
     if (res) {
@@ -136,6 +175,9 @@ function oeffnungenZeichnen(r) {
       regler.setAttribute("aria-valuetext", `ab ${meter(res.g0 * 125)}`);
     }
   });
+  bewegt = false;
+  if (kollision && !zustand.oeffnungen[kollision.i]) kollision = null;
+  r.kollision = kollision;
   for (const art of ["tuer", "fenster"])
     $(art === "tuer" ? "plusTuer" : "plusFenster").disabled = zustand.oeffnungen.filter((o) => o.art === art).length >= OEFFNUNGEN[art].max;
 }
@@ -329,6 +371,7 @@ function aktualisieren() {
     ],
   };
   if (linkHinweise.wahl === wahlKennung()) r.hinweise.unshift(...linkHinweise.texte);
+  if (r.kollision) r.hinweise.unshift(`Öffnung kollidiert: ${r.kollision.grund}. Rot markiert ist die gewünschte Lage.`);
   $("hinweise").innerHTML = hinweiseBuehne(r.hinweise);
 
   zeichnen2d();

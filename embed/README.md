@@ -81,6 +81,7 @@ Diese Ereignisnamen gibt es:
 | `fassade_gewaehlt` | Fassade gewählt |
 | `innen_gewaehlt` | Innenseite gewählt |
 | `oeffnung` | Tür oder Fenster hinzugefügt |
+| `oeffnung_position` | Position einer Öffnung als Zahl eingegeben |
 | `info` | Reiter geöffnet (So funktioniert's, Stückliste, Wärmeschutz) |
 | `ansicht` | Vorschau gewechselt, `daten.ansicht`: `3d`, `aussen` oder `innen` |
 | `vollbild` | Vorschau im Vollbild geöffnet |
