@@ -36,7 +36,7 @@ const wls = (a) => String(Math.round((a.schichten.find((s) => s.art === "feld")?
 function position(t, a, seite, flaeche, teile) {
   const n = t.name, p = produkt(n), aussen = seite === "aussen";
   const holzUk = a.uk !== "alu";
-  if (t.symbol === "schraube") return null;   // in Verbinder bzw. Konterlattung enthalten
+  if (t.symbol === "schraube") return null;   // in Verbinder bzw. senkrechter Lattung enthalten
   if (t.symbol === "verbinder") {
     const schraube = teile.find((x) => x.symbol === "schraube" && x.name.startsWith("Verbinderschraube"));
     return { kurz: `${n}, lösbar, in der Nut`, menge: t.menge, einheit: "Stk",
@@ -45,7 +45,7 @@ function position(t, a, seite, flaeche, teile) {
   }
   if (t.symbol === "winkel") {
     if (t.name === "Fußauflager") return { kurz: "Fußauflager je Achse, Stahlwinkel", menge: t.menge, einheit: "Stk",
-      lang: "Stahlwinkel, feuerverzinkt, unter KVH und Konterlatte je Achse, auf Sockel bzw. Rohdecke befestigt. Trägt das Eigengewicht der Fassade; die Verbinder nehmen nur Zug aus Windsog und der Ausmitte der Bekleidung auf. Statischer Nachweis durch den Tragwerksplaner." };
+      lang: "Stahlwinkel, feuerverzinkt, unter KVH und senkrechter Latte je Achse, auf Sockel bzw. Rohdecke befestigt. Trägt das Eigengewicht der Fassade; die Verbinder nehmen nur Zug aus Windsog und der Ausmitte der Bekleidung auf. Statischer Nachweis durch den Tragwerksplaner." };
     return aussen
       ? { kurz: "Auflager der Unterkonstruktion über Öffnungen", menge: t.menge, einheit: "Stk",
         lang: "Winkel am Sturz oder Wechsel bzw. Riegel zu den Nachbarachsen; trägt das Eigengewicht der Bekleidung über Fenstern und Türen." }
@@ -92,13 +92,16 @@ function position(t, a, seite, flaeche, teile) {
         lang: `Lattung aus Nadelholz ${p.replace("Latte ", "")} mm, senkrecht auf den IA-Verbindern, Achsabstand ${a.achsraster_mm} mm, stehend auf der Schwelle. Leitungen laufen in der Installationsebene, ohne Eingriff in die Steine.` };
       const schraube = teile.find((x) => x.symbol === "schraube" && x.name.startsWith("Holzbauschraube"));
       const luft = /Hinterlüftung (\d+) mm/.exec(n);
-      return { kurz: `Konterlattung ${p.replace("Konterlatte ", "")}`, menge: t.menge, einheit: "lfm",
+      // Senkrechte Latte auf den KVH-Achsen: Traglatte, wenn die Bekleidung direkt daran hängt (Holzleisten),
+      // sonst Lattung unter der waagerechten Traglatte (Schindel). Keine „Konterlatte“: Sie kreuzt nichts.
+      const mass = /\d+ × \d+/.exec(p)?.[0] || p;
+      return { kurz: `${/^Traglatte/.test(n) ? "Traglattung" : "Lattung"} ${mass}, senkrecht`, menge: t.menge, einheit: "lfm",
         lang: `Nadelholz, technisch getrocknet, über der ${a.schichten.some((s) => s.material === "fassadenbahn") ? "Fassadenbahn" : "Holzfaserplatte"} ins KVH verschraubt${schraube ? ` (${schraube.name}, etwa alle 30 cm, Spitze mindestens 4 mm vor dem Stein)` : ""}; bildet die Hinterlüftungsebene${luft ? ` ${luft[1]} mm` : ""}.` };
     }
     case "latte_h": {
       const abstand = /Abstand (\d+)/.exec(n);
-      return { kurz: `Traglattung ${p.replace("Traglatte ", "")}`, menge: t.menge, einheit: "lfm",
-        lang: `Nadelholz, technisch getrocknet, waagerecht auf der Konterlattung, Abstand nach Deckung der Bekleidung${abstand ? ` [${abstand[1]} mm]` : ""}.` };
+      return { kurz: `Traglattung ${p.replace("Traglatte ", "")}, waagerecht`, menge: t.menge, einheit: "lfm",
+        lang: `Nadelholz, technisch getrocknet, waagerecht auf der senkrechten Lattung, Abstand nach Deckung der Bekleidung${abstand ? ` [${abstand[1]} mm]` : ""}.` };
     }
     case "schindel": case "leiste_h": case "paneel": {
       // Abgerechnet wird die Fläche; die Stückzahl der Stückliste steht als Orientierung im Text.

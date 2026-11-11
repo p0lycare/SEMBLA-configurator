@@ -129,12 +129,12 @@ function ausbauTeile(r, aufbau, ver, seite) {
   if (aufbau.schraube && r.schraube && r.schraube.laenge_mm && seite === "aussen") {
     const konter = aufbau.schichten.find((s) => s.id === aufbau.schraube.durch[0]);
     if (konter) teile.push({ symbol: "schraube", name: `Holzbauschraube ${r.schraube.durchmesser_mm} × ${r.schraube.laenge_mm}`,
-      menge: Math.ceil(lfm(segLaenge) / 0.3), einheit: "Stk", detail: "Konterlatte → KVH, etwa alle 30 cm", ca: true, material: "stahl" });
+      menge: Math.ceil(lfm(segLaenge) / 0.3), einheit: "Stk", detail: `${konter.name.split(" ")[0]} → KVH, etwa alle 30 cm`, ca: true, material: "stahl" });
   }
   if (seite === "aussen" && holz) {
     // Eigengewicht über Auflager statt über die Verbinder (Verbinder-Vorbemessung, verbinder.js).
     const fuss = ver.segmente.filter((s) => s.y0 < 1).length, sturz = ver.segmente.length - fuss;
-    teile.push({ symbol: "winkel", name: "Fußauflager", menge: fuss, einheit: "Stk", detail: "Stahlwinkel unter Konterlatte und KVH, je Achse", material: "stahl" });
+    teile.push({ symbol: "winkel", name: "Fußauflager", menge: fuss, einheit: "Stk", detail: "Stahlwinkel unter senkrechter Latte und KVH, je Achse", material: "stahl" });
     if (sturz) teile.push({ symbol: "winkel", name: "Auflager über Öffnung", menge: sturz, einheit: "Stk", detail: "Winkel am Sturz oder Wechsel zur Nachbarachse", material: "stahl" });
   }
   if (seite === "innen" && aufbau.schichten.some((s) => s.art === "latte_v")) {

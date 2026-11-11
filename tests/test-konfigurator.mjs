@@ -123,7 +123,7 @@ test("Ohne Aufbau gibt es keine Verbinder", () => {
   assert.equal(r.fa.punkte.length + r.ia.punkte.length, 0);
 });
 
-test("Schraubenregel: Konterlatte 24 + Platte 80 + 50 mm Einbindung → 6 × 160, Spitze 4 mm vor dem Stein", () => {
+test("Schraubenregel: Latte 24 + Platte 80 + 50 mm Einbindung → 6 × 160, Spitze 4 mm vor dem Stein", () => {
   const s = schraubenlaenge(fass("schindel"));
   assert.equal(s.laenge_mm, 160);
   assert.equal(s.durchmesser_mm, 6);

@@ -23,7 +23,7 @@
       "flaechengewicht_kg_m2": 60,
       "rueckbau": "Schindeln abschrauben, Lattung lösen, Holzfaserplatte und Mineralwolle sortenrein abnehmen.",
       "schraube": {
-        "bezeichnung": "Holzbauschraube Konterlatte → KVH",
+        "bezeichnung": "Holzbauschraube Latte → KVH",
         "durchmesser_mm": 6,
         "durch": [
           "konterlatte",
@@ -78,7 +78,7 @@
         },
         {
           "id": "konterlatte",
-          "name": "Konterlatte 24 × 50, Hinterlüftung 24 mm",
+          "name": "Latte senkrecht 24 × 50, Hinterlüftung 24 mm",
           "art": "latte_v",
           "dicke": 24,
           "breite": 50,
@@ -86,7 +86,7 @@
         },
         {
           "id": "traglatte",
-          "name": "Traglatte 24 × 48, Abstand 150",
+          "name": "Traglatte 24 × 48, waagerecht, Abstand 150",
           "art": "latte_h",
           "dicke": 24,
           "breite": 48,
@@ -148,7 +148,7 @@
       "flaechengewicht_kg_m2": 32,
       "rueckbau": "Leisten aus den Clips lösen, Lattung abschrauben, Holzfaserplatte und Mineralwolle sortenrein abnehmen.",
       "schraube": {
-        "bezeichnung": "Holzbauschraube Konterlatte → KVH",
+        "bezeichnung": "Holzbauschraube Latte → KVH",
         "durchmesser_mm": 6,
         "durch": [
           "konterlatte",
@@ -203,7 +203,7 @@
         },
         {
           "id": "konterlatte",
-          "name": "Konterlatte 24 × 50, Hinterlüftung 24 mm",
+          "name": "Traglatte 24 × 50, senkrecht, Hinterlüftung 24 mm",
           "art": "latte_v",
           "dicke": 24,
           "breite": 50,
@@ -265,7 +265,7 @@
       "flaechengewicht_kg_m2": 58,
       "rueckbau": "Schindeln abschrauben, Lattung und Holzfaserplatte lösen, Mineralwolle und KVH sortenrein abnehmen.",
       "schraube": {
-        "bezeichnung": "Holzbauschraube Konterlatte → KVH",
+        "bezeichnung": "Holzbauschraube Latte → KVH",
         "durchmesser_mm": 6,
         "durch": [
           "konterlatte",
@@ -320,7 +320,7 @@
         },
         {
           "id": "konterlatte",
-          "name": "Konterlatte 24 × 50, Hinterlüftung 24 mm",
+          "name": "Latte senkrecht 24 × 50, Hinterlüftung 24 mm",
           "art": "latte_v",
           "dicke": 24,
           "breite": 50,
@@ -328,7 +328,7 @@
         },
         {
           "id": "traglatte",
-          "name": "Traglatte 24 × 48, Abstand 150",
+          "name": "Traglatte 24 × 48, waagerecht, Abstand 150",
           "art": "latte_h",
           "dicke": 24,
           "breite": 48,
@@ -375,7 +375,7 @@
       "flaechengewicht_kg_m2": 28,
       "rueckbau": "Leisten aus den Clips lösen, Lattung abschrauben, Fassadenbahn abnehmen, Mineralwolle, KVH und Dampfbremse sortenrein abnehmen.",
       "schraube": {
-        "bezeichnung": "Holzbauschraube Konterlatte → KVH",
+        "bezeichnung": "Holzbauschraube Latte → KVH",
         "durchmesser_mm": 6,
         "durch": [
           "konterlatte",
@@ -427,7 +427,7 @@
         },
         {
           "id": "konterlatte",
-          "name": "Konterlatte 24 × 50, Hinterlüftung 24 mm",
+          "name": "Traglatte 24 × 50, senkrecht, Hinterlüftung 24 mm",
           "art": "latte_v",
           "dicke": 24,
           "breite": 50,

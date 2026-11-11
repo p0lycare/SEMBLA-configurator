@@ -84,7 +84,7 @@ export function uWert(fassade, innen, kw, halterJeM2 = kw.halter.je_m2) {
 }
 
 /**
- * Befestiger, die eine Dämmschicht ganz durchdringen (Holzbauschrauben der Konterlatte durch die
+ * Befestiger, die eine Dämmschicht ganz durchdringen (Holzbauschrauben der senkrechten Latte durch die
  * Holzfaserplatte), nach DIN EN ISO 6946 Anhang F: ΔUf = α · λf · Af · nf / d0 · (R1 / RT)², α = 0,8.
  */
 function befestigerZuschlag(fassade, RT) {
@@ -94,7 +94,7 @@ function befestigerZuschlag(fassade, RT) {
   if (!platte) return 0;
   const d0 = platte.dicke / 1000, R1 = d0 / platte.lambda;
   const Af = Math.PI * (sc.durchmesser_mm / 2000) ** 2;
-  const nf = 1 / ((fassade.achsraster_mm / 1000) * (sc.abstand_mm / 1000));   // je Konterlatte alle `abstand_mm`
+  const nf = 1 / ((fassade.achsraster_mm / 1000) * (sc.abstand_mm / 1000));   // je senkrechter Latte alle `abstand_mm`
   return 0.8 * sc.lambda * Af * nf / d0 * (R1 / RT) ** 2;
 }
 

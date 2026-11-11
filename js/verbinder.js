@@ -19,7 +19,7 @@ function ausmitten(aufbau) {
   if (!lagen.length) return { frei: 0, getragen: 0 };
   const mitte = (s) => (s.z0 + s.z1) / 2;
   const bekleidung = lagen[lagen.length - 1];
-  // Das Fußauflager steht unter der Konterlatte (Mock-up); darüber kragt nur die Bekleidung aus.
+  // Das Fußauflager steht unter der senkrechten Latte (Mock-up); darüber kragt nur die Bekleidung aus.
   const auflager = lagen.find((s) => s.id === aufbau.belueftung_ab) || lagen[0];
   return { frei: mitte(bekleidung), getragen: Math.max(0, mitte(bekleidung) - mitte(auflager)) };
 }
