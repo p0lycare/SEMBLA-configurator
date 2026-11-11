@@ -33,6 +33,7 @@ Dann <http://localhost:8000/> öffnen. Die Einbettung lässt sich unter <http://
 | `datenblatt.html`, `js/datenblatt.js` | druckfertiges Datenblatt („Als PDF speichern“), Link kommt per E-Mail |
 | `js/anfrage.js` | Datenblatt-Anfrage an HubSpot, Einrichtung in [`docs/HUBSPOT.md`](docs/HUBSPOT.md) |
 | `js/export-lv.js`, `js/export-gaeb.js` | LV-Entwurf als Text und als GAEB DA XML 3.3 (X83, gegen `GAEB_DA_XML_83_3.3_2021-05.xsd` geprüft) |
+| `js/export-hygro.js`, `tools/wandaufbau.mjs` | Wandaufbau als JSON für hygrothermische Berechnungen: Schichten im Gefachschnitt (`sembla-wandaufbau` v1), `node tools/wandaufbau.mjs "<Link>"` bzw. `--alle` |
 | `data/aufbauten.json` | Fassaden- und Innenaufbauten, neue Varianten ohne Programmierung |
 | `embed/sembla-einbettung.html` | Snippet für die Agentur |
 | `tests/test-konfigurator.mjs` | Regressionstests (`npm test`) |
