@@ -237,7 +237,7 @@ function rueckbauText(t) {
   if (t === 0) { schritt = ""; text = "Schieben Sie den Regler: So wird die Wand zerstörungsfrei zurückgebaut."; }
   else if (t < 0.36) { schritt = "Schritt 1 von 3"; text = `Ausbau lösen: ${fass.rueckbau || "Innenausbau an den Verbindern lösen."} Die Verbinder kommen aus den Verbindernuten, die Steine bleiben unbeschädigt.`; }
   else if (t < 0.6) { schritt = "Schritt 2 von 3"; text = `Vorspannung lösen: Die Muttern werden geöffnet, ${k?.gewindestangen ?? ""} Gewindestangen werden aus den Kammern gezogen.`; }
-  else { schritt = "Schritt 3 von 3"; text = `Lage für Lage abheben${ergebnis && zwischenpunkte(ergebnis.w) ? `, die ${zwischenpunkte(ergebnis.w)} Einlegebleche der Zwischenspannpunkte kommen mit heraus` : ""}: Alle ${k?.steine ?? ""} Steine lassen sich wieder einsetzen. Das Gebäude wird zum Bauteillager.`; }
+  else { schritt = "Schritt 3 von 3"; text = `Lage für Lage abheben${ergebnis && zwischenpunkte(ergebnis.w) ? `, die ${zwischenpunkte(ergebnis.w)} Einlegebleche der Zwischenspannpunkte kommen mit heraus` : ""}: Mindestens 90 % der ${k?.steine ?? ""} Steine lassen sich wieder einsetzen. Das Gebäude wird zum Bauteillager.`; }
   $("rueckbauSchritt").textContent = schritt;
   $("rueckbau").setAttribute("aria-valuetext", schritt || "Wand vollständig");
   $("rueckbauText").textContent = text;

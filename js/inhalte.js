@@ -199,7 +199,7 @@ export function regelnHtml(r, innen, mitRegler = true, { kurz = false } = {}) {
     return [
       `<b>Raster:</b> ${m(k.laenge_mm, 3).replace(/0 m$/, " m")} = ${k.laenge_mm / 125} × 12,5 cm, die Stoßfugen von Lage zu Lage versetzt.`,
       `<b>Trocken und vorgespannt:</b> kein Mörtel. ${k.spannachsen} Gewindestangen spannen die Lagen zusammen.`,
-      `<b>Lösbar und zirkulär:</b> ${ausbau ? `${k.verbinder_fa + k.verbinder_ia} Verbinder sitzen in den Verbindernuten, gebohrt oder gedübelt wird nicht. ` : ""}Jede Schicht ist sortenrein trennbar, alle ${k.steine} Steine sind wiederverwendbar.${mitRegler ? " Probieren Sie den Rückbau-Regler." : ""}`,
+      `<b>Lösbar und zirkulär:</b> ${ausbau ? `${k.verbinder_fa + k.verbinder_ia} Verbinder sitzen in den Verbindernuten, gebohrt oder gedübelt wird nicht. ` : ""}Jede Schicht ist sortenrein trennbar, mindestens 90 % der ${k.steine} Steine sind wiederverwendbar.${mitRegler ? " Probieren Sie den Rückbau-Regler." : ""}`,
     ].map((t) => `<li><span>${t}</span></li>`).join("");
   }
   const li = [
@@ -221,7 +221,7 @@ export function regelnHtml(r, innen, mitRegler = true, { kurz = false } = {}) {
   li.push(fassade.schichten.length
     ? `<b>Verwendbarkeit:</b> Für SEMBLA als nichttragende Innenwand ist ein allgemeines bauaufsichtliches Prüfzeugnis (abP) in Vorbereitung. Mit vorgehängter Fassade braucht die Wand eine Zustimmung im Einzelfall.`
     : `<b>Verwendbarkeit:</b> nichttragende Innenwand nach DIN 4103-1; das allgemeine bauaufsichtliche Prüfzeugnis (abP) ist in Vorbereitung.`);
-  li.push(`<b>Zirkulär:</b> Jede Schicht ist sortenrein trennbar, alle ${k.steine} Steine sind wiederverwendbar.${mitRegler ? " Probieren Sie den Rückbau-Regler." : ""}`);
+  li.push(`<b>Zirkulär:</b> Jede Schicht ist sortenrein trennbar, mindestens 90 % der ${k.steine} Steine sind wiederverwendbar.${mitRegler ? " Probieren Sie den Rückbau-Regler." : ""}`);
   return li.map((t) => `<li><span>${t}</span></li>`).join("");
 }
 

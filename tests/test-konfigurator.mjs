@@ -430,6 +430,13 @@ test("Bodenblech unter Türen ausgespart (B4), Fenster ändern nichts", () => {
   assert.equal(ohneTuer.w.base_plate.laenge_mm, 6000);
 });
 
+test("Wiederverwendbarkeit (B15): mindestens 90 %, nie „alle Steine“", () => {
+  const r = berechne({ laenge_mm: 6000, raumhoehe_mm: 2820, oeffnungen: [T], fassade: fass("schindel"), innen: inn("sicht"), waerme: { kennwerte: A.waerme, ziel_U: 0.2 } });
+  const html = regelnHtml(r, inn("sicht")) + regelnHtml(r, inn("sicht"), true, { kurz: true }) + wandAlsLv(r, r.fassade, inn("sicht"));
+  assert.ok(/mindestens 90 %/.test(html));
+  assert.ok(!/alle \d+ Steine|Alle \d+ Steine|100 %/.test(html));
+});
+
 test("Lieferumfang (B23): Polycare liefert Steine, Spannsystem, Anschlüsse und Verbinder, der Rest ist bauseits", () => {
   const r = berechne({ laenge_mm: 6000, raumhoehe_mm: 2820, oeffnungen: [T, F], fassade: fass("schindel"), innen: inn("trockenbau_putz"),
     waerme: { kennwerte: A.waerme, ziel_U: 0.2 } });
