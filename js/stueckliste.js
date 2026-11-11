@@ -57,7 +57,7 @@ function spannTeile(r) {
       detail: `${b.kopplungsmuttern_basis} am Fuß, ${b.verbindungsmuttern} an Stößen` },
     { symbol: "sechskant", name: "Sechskantschraube M10 × 30", menge: b.senkkopfschrauben, einheit: "Stk", detail: "DIN 933, von unten durchs Bodenblech" },
   );
-  if (zp) teile.push({ symbol: "einlegeblech", name: "Einlegeblech mit Mutter", menge: zp, einheit: "Stk", detail: "Zwischenspannpunkt" });
+  if (zp) teile.push({ symbol: "einlegeblech", name: "Einlegeblech mit Mutter", menge: zp, einheit: "Stk", detail: "Zwischenspannpunkt: hält die Stange beim Aufmauern mittig, eines je Spannstrang etwa auf halber Höhe" });
   teile.push(
     { symbol: "spannplatte", name: "Spannplatte", menge: b.spannplatten, einheit: "Stk", detail: "120 × 120 × 10 mm" },
     { symbol: "mutter", name: "Spannmutter M10", menge: b.spannmuttern, einheit: "Stk", detail: "eine je Spannplatte" },

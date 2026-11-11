@@ -14,6 +14,7 @@ import { freieHoehen, nachweis } from "../js/verbinder.js";
 import { wandAlsDxf } from "../js/export-dxf.js";
 import { wandAlsLv, lvDaten } from "../js/export-lv.js";
 import { zeichneSchnitt } from "../js/schnitt2d.js";
+import { planungHtml } from "../js/inhalte.js";
 import { wandAlsGaeb } from "../js/export-gaeb.js";
 import { zustandAusUrl, urlParameter, aufbauWahl, datenblattParameter, RECHENSTAND, STANDARD, regelnHtml, feuchteHtml } from "../js/inhalte.js";
 
@@ -447,6 +448,19 @@ test("Wandschnitt (1.4): Gesamtdicke wie Kennwert, jede Zone in der Liste", () =
     assert.equal((el.innerHTML.match(/<li>/g) || []).length, info.schichten);
     assert.ok(/SEMBLA-Stein/.test(el.innerHTML) && !/NaN|undefined/.test(el.innerHTML), `${f}/${i}`);
   }
+});
+
+test("B11/B19: Verbinder kurz für Kunden, Annahmen für Planende, Einlegebleche erklärt", () => {
+  const r = berechne({ laenge_mm: 6000, raumhoehe_mm: 2820, oeffnungen: [T, F], fassade: fass("schindel"), innen: inn("trockenbau_putz"),
+    waerme: { kennwerte: A.waerme, ziel_U: 0.2 }, verbinder: A.verbinder });
+  const kunde = regelnHtml(r, inn("trockenbau_putz"), false);
+  assert.ok(/Verbinder bemessen:<\/b> Jeder Verbinder hält den Windsog/.test(kunde));
+  assert.ok(!/Windzone|Ausnutzung|Schrauben:/.test(kunde));
+  assert.ok(/Einlegeblech mit Mutter \(\d+ Stück\)/.test(kunde));
+  const planer = planungHtml(r, inn("trockenbau_putz"));
+  assert.ok(/Windzone 2/.test(planer) && /außen höchstens \d+ %/.test(planer) && /Fußauflager/.test(planer) && /Holzbauschraube/.test(planer));
+  const eb = stueckliste(r, r.fassade, inn("trockenbau_putz")).flatMap((g) => g.teile).find((t) => t.symbol === "einlegeblech");
+  assert.ok(eb && /mittig/.test(eb.detail));
 });
 
 test("Lieferumfang (B23): Polycare liefert Steine, Spannsystem, Anschlüsse und Verbinder, der Rest ist bauseits", () => {

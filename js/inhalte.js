@@ -2,7 +2,7 @@
 // schreiben, Kennzahlen, Stückliste, Regeln und Wärmeschutz als HTML.
 
 import { ROHWAND, VERBINDERSCHRAUBEN, OEFFNUNGEN, oeffnungsMasse } from "./wand.js";
-import { THICK } from "./sembla-core.js";
+import { THICK, wirksameZwischenpunkte } from "./sembla-core.js";
 import { teilBild } from "./teilebilder.js";
 import { daemmText } from "./waerme.js";
 import { LIEFERUNG } from "./stueckliste.js";
@@ -182,6 +182,29 @@ export function stuecklisteKurzHtml(gruppen, r) {
   }).join("")}</ul>`;
 }
 
+/**
+ * Annahmen für Planende (Datenblatt, Feedback Felix B11): Lastannahmen und Ausnutzung der
+ * Verbinder, Lastabtrag des Eigengewichts, Schrauben. Leer ohne Ausbau.
+ */
+export function planungHtml(r, innen) {
+  const b = r.bemessung || {}, pz = (x) => `${Math.round(x * 100)} %`, li = [];
+  if (b.fa || b.ia) {
+    li.push(`<b>Lastannahmen:</b> Windsog in Windzone 2 (Binnenland), Gebäude bis 10 m hoch, an der Gebäudeecke angesetzt. Für andere Standorte ändert sich die Verbinderdichte.`);
+    const aus = [];
+    if (b.fa) aus.push(`außen höchstens ${pz(b.fa.max)}`);
+    if (b.ia) aus.push(`innen höchstens ${pz(b.ia.max)}`);
+    const ergaenzt = (b.fa?.ergaenzt || 0) + (b.ia?.ergaenzt || 0);
+    li.push(`<b>Ausnutzung der Verbinder:</b> ${aus.join(", ")}.${ergaenzt ? ` Dafür sind ${ergaenzt} Verbinder zusätzlich zum Regelraster gesetzt.` : ""} Die Verbinder tragen nur Zug aus Windsog und der Ausmitte der Bekleidung.`);
+    li.push(`<b>Eigengewicht:</b> ${b.fa ? "außen ein Fußauflager je Achse und Auflager über Öffnungen" : ""}${b.fa && b.ia ? "; " : ""}${b.ia ? "innen eine Schwelle am Boden und Riegel über Öffnungen" : ""}. Die Klemmung der Verbinder entlang der Verbindernut wird nicht angesetzt, weil sie beim Schwinden des Holzes nachlässt.`);
+  }
+  if (r.schraube && r.schraube.laenge_mm) {
+    li.push(`<b>Schrauben:</b> Latte → KVH: ${r.schraube.bezeichnung.replace(/ Latte → KVH$/, "")} ${r.schraube.durchmesser_mm} × ${r.schraube.laenge_mm} (${r.schraube.begruendung}). Verbinder: Fassade ${VERBINDERSCHRAUBEN.fa}, innen ${VERBINDERSCHRAUBEN.ia}.`);
+  } else if (innen?.schichten?.length && b.ia) {
+    li.push(`<b>Schrauben:</b> Verbinder innen ${VERBINDERSCHRAUBEN.ia}.`);
+  }
+  return li.map((t) => `<li><span>${t}</span></li>`).join("");
+}
+
 /** Hinweis zum Lieferumfang (Datenblatt Seite 1, Text nach Felix, Feedback B23). */
 export const LIEFERUMFANG_TEXT = "Polycare liefert das SEMBLA-Wandsystem: Steine, Spannsystem, Verbinder und Anschlussteile (in der Stückliste unter „Lieferung Polycare“). "
   + "Alle weiteren Schichten wie Unterkonstruktion, Dämmung, Fassade und Innenausbau sind beispielhaft angegeben. Sie werden durch die Planenden eigenverantwortlich geplant, bemessen und ausgeschrieben; es gelten die Angaben der jeweiligen Hersteller. "
@@ -202,21 +225,15 @@ export function regelnHtml(r, innen, mitRegler = true, { kurz = false } = {}) {
       `<b>Lösbar und zirkulär:</b> ${ausbau ? `${k.verbinder_fa + k.verbinder_ia} Verbinder sitzen in den Verbindernuten, gebohrt oder gedübelt wird nicht. ` : ""}Jede Schicht ist sortenrein trennbar, mindestens 90 % der ${k.steine} Steine sind wiederverwendbar.${mitRegler ? " Probieren Sie den Rückbau-Regler." : ""}`,
     ].map((t) => `<li><span>${t}</span></li>`).join("");
   }
+  const zp = wirksameZwischenpunkte(r.w).length;
   const li = [
     `<b>Raster:</b> ${m(k.laenge_mm, 3).replace(/0 m$/, " m")} = ${k.laenge_mm / 125} × 12,5 cm. Lange i3-Steine füllen die Wand, kurze i2 nur an den Enden. Die Stoßfugen sind von Lage zu Lage versetzt.`,
-    `<b>Trocken und vorgespannt:</b> kein Mörtel. ${k.spannachsen} Gewindestangen laufen durch die Kammern und spannen die Lagen zwischen Bodenblech und Spannplatte zusammen. Die Spannachsen haben höchstens 37,5 cm Abstand (drei Raster).`,
+    `<b>Trocken und vorgespannt:</b> kein Mörtel. ${k.spannachsen} Gewindestangen laufen durch die Kammern und spannen die Lagen zwischen Bodenblech und Spannplatte zusammen. Die Spannachsen haben höchstens 37,5 cm Abstand (drei Raster).${zp ? ` Etwa auf halber Höhe jedes Spannstrangs sitzt ein Einlegeblech mit Mutter (${zp} Stück): Es hält die Stange beim Aufmauern mittig in der Kammer.` : ""}`,
   ];
   if (fassade.schichten.length || innen.schichten.length) {
     li.push(`<b>Lösbare Verbinder:</b> ${k.verbinder_fa + k.verbinder_ia} Verbinder sitzen in den Verbindernuten, immer in Steinmitte und nie in einer Fuge. In den Stein wird nicht gebohrt oder gedübelt; befestigt werden nur die Anschlüsse an Boden und Decke.`);
-    const b = r.bemessung || {}, pz = (x) => `${Math.round(x * 100)} %`;
-    const teile = [];
-    if (b.fa) teile.push(`außen höchstens ${pz(b.fa.max)} (Windsog in Windzone 2, Gebäude bis 10 m, auch an der Gebäudeecke; das Eigengewicht trägt ein Fußauflager)`);
-    if (b.ia) teile.push(`innen höchstens ${pz(b.ia.max)} (die Latten stehen auf einer Schwelle)`);
-    const ergaenzt = (b.fa?.ergaenzt || 0) + (b.ia?.ergaenzt || 0);
-    if (teile.length) li.push(`<b>Verbinder bemessen:</b> Ausnutzung ${teile.join(", ")}.${ergaenzt ? ` ${ergaenzt} Verbinder sind dafür zusätzlich gesetzt.` : ""} Vorbemessung, ersetzt keine Statik.`);
-  }
-  if (r.schraube && r.schraube.laenge_mm) {
-    li.push(`<b>Schrauben:</b> Latte → KVH: ${r.schraube.bezeichnung.replace(/ Latte → KVH$/, "")} ${r.schraube.durchmesser_mm} × ${r.schraube.laenge_mm} (${r.schraube.begruendung}). Verbinder: Fassade ${VERBINDERSCHRAUBEN.fa}, innen ${VERBINDERSCHRAUBEN.ia}.`);
+    if (r.bemessung?.fa || r.bemessung?.ia)
+      li.push(`<b>Verbinder bemessen:</b> Jeder Verbinder hält den Windsog mit Reserve, das Gewicht der Bekleidung tragen Auflager. Vorbemessung, ersetzt keine Statik; die Annahmen stehen unten.`);
   }
   li.push(fassade.schichten.length
     ? `<b>Verwendbarkeit:</b> Für SEMBLA als nichttragende Innenwand ist ein allgemeines bauaufsichtliches Prüfzeugnis (abP) in Vorbereitung. Mit vorgehängter Fassade braucht die Wand eine Zustimmung im Einzelfall.`

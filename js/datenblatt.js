@@ -5,7 +5,7 @@ import { berechne, zusammenfassung } from "./wand.js";
 import { zeichne } from "./ansicht2d.js";
 import { zeichneSchnitt } from "./schnitt2d.js";
 import { stueckliste } from "./stueckliste.js";
-import { m, zustandAusUrl, urlParameter, aufbauWahl, kachelnHtml, stuecklisteHtml, regelnHtml, hinweiseHtml, waermeHtml, RECHENSTAND, LIEFERUMFANG_TEXT } from "./inhalte.js";
+import { m, zustandAusUrl, urlParameter, aufbauWahl, kachelnHtml, stuecklisteHtml, regelnHtml, hinweiseHtml, waermeHtml, RECHENSTAND, LIEFERUMFANG_TEXT, planungHtml } from "./inhalte.js";
 import { ereignis } from "./einbettung.js";
 
 const $ = (id) => document.getElementById(id);
@@ -37,6 +37,8 @@ else if (!zustand.stand && r.waerme?.daemmung_mm)
   r.hinweise.unshift("Dieser Link stammt aus einer früheren Version des Konfigurators. Die Dämmstärken sind nach aktuellem Stand neu ausgelegt.");
 $("hinweise").innerHTML = hinweiseHtml(r);
 $("regeln").innerHTML = regelnHtml(r, innen, false);
+$("planung").innerHTML = planungHtml(r, innen);
+$("planungBlock").hidden = !$("planung").innerHTML;
 $("waerme").innerHTML = waermeHtml(r, innen, A, ziel.id);
 $("stueckliste").innerHTML = stuecklisteHtml(stueckliste(r, r.fassade, innen), A.materialien);
 $("zurueck").search = new URLSearchParams(urlParameter(zustand, r)).toString();

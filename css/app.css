@@ -289,3 +289,9 @@ a.knopf { display: inline-block; text-decoration: none; }
   .buehne-kopf .tabs button { padding: 8px 9px; font-size: 13px; }
 }
 #ansichtSchnitt { min-width: 0; }
+/* Datenblatt: Annahmen für Planende unter „So funktioniert Ihre Wand“ (B11). */
+h3.unter { margin: 18px 0 6px; font-size: 16px; }
+#planung { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; font-size: 14px; color: var(--text2); }
+#planung li { display: block; }
+#planung li::before { content: none; }
+#planung b { color: var(--text); }
