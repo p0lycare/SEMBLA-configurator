@@ -117,6 +117,13 @@ input[type=range] { width: 100%; height: 28px; accent-color: var(--gruen); margi
 .ergebnis { display: grid; gap: 18px; min-width: 0; }
 .buehne { background: var(--flaeche); border-radius: 12px; padding: 16px; display: grid; gap: 14px; min-width: 0; }
 .buehne-kopf { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
+.kopf-rechts { display: inline-flex; align-items: center; gap: 14px; }
+.vollbild { font-size: 13px; }
+/* Vollbild (Feedback Felix 1.2): die ganze Vorschau, Bild so groß wie möglich. */
+.buehne.vollbild-an { position: fixed; inset: 0; z-index: 1000; margin: 0; border-radius: 0; background: var(--grund); padding: 16px; overflow: auto; display: grid; align-content: start; gap: 12px; max-width: none; }
+.vollbild-offen, .vollbild-offen body { overflow: hidden; }
+.buehne.vollbild-an .viewer { height: calc(100dvh - 230px); min-height: 280px; }
+.buehne.vollbild-an .zeichnung svg { max-height: calc(100dvh - 150px); }
 .tabs { display: inline-flex; background: var(--grund); border: 1px solid var(--linie); border-radius: 999px; padding: 3px; }
 .tabs button { cursor: pointer; border: 0; background: transparent; border-radius: 999px; padding: 8px 16px; min-height: 40px; font-size: 14px; }
 .tabs button[aria-selected=true] { background: var(--text); color: var(--grund); }
@@ -154,6 +161,7 @@ details.rechenweg[open] > summary, details.alle-teile[open] > summary { margin-b
 .sw { display: inline-block; width: 18px; height: 10px; border: 1px solid #8A8A85; }
 .sw.linie { width: 3px; height: 12px; background: var(--gruen); border: 0; }
 .sw.punkt { width: 10px; height: 10px; border-radius: 50%; background: var(--gruen); border: 0; }
+.zeichnung { overflow-x: auto; }
 .zeichnung svg { display: block; width: 100%; height: auto; max-height: 520px; }
 
 /* Kennwerte: Gruppen nebeneinander, so breit wie ihre Kacheln; Farbe nur als Akzent. */
@@ -264,3 +272,6 @@ a.knopf { display: inline-block; text-decoration: none; }
 .waerme ul.feuchte { margin: 0; padding-left: 18px; display: grid; gap: 6px; font-size: 14px; }
 .oeffnung-zeile.zu [data-info] { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .oeffnungsliste, .oeffnung-zeile { grid-template-columns: minmax(0, 1fr); min-width: 0; }
+
+/* Breite Zeichnung scrollt in sich, nicht die Seite. */
+.buehne, #ansicht2d { min-width: 0; }

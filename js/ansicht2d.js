@@ -14,12 +14,19 @@ function bemassung(x0, x1, y, text, fs) {
     + `<text x="${(x0 + x1) / 2}" y="${y - Math.round(fs * 0.55)}" text-anchor="middle" font-size="${fs}" fill="#5E5E5E" font-family="ui-monospace, Menlo, monospace">${text}</text></g>`;
 }
 
-export function zeichne(el, r) {
-  const { w, fa, kennzahlen: k } = r;
+/**
+ * seite: "aussen" (Fassadenseite, x läuft nach rechts wie in der 3D-Ansicht „Außen“) oder "innen"
+ * (Raumseite: gespiegelt, mit den Verbindern der Innenseite). Beschriftungen werden nicht gespiegelt.
+ * minHoehe (px): Die Zeichnung wird nie flacher; breite Wände lassen sich dann seitlich scrollen.
+ */
+export function zeichne(el, r, { seite = "aussen", minHoehe = 0 } = {}) {
+  const { w, kennzahlen: k } = r;
+  const innen = seite === "innen";
+  const punkte = (innen ? r.ia : r.fa)?.punkte || [];
   const L = w.length_mm, H = w.height_mm, D = k.raumhoehe_mm;
   const Y = (y) => D - y;   // SVG-y nach unten
   const fs = schrift(L, D);
-  const kopf = `Ansicht von außen · Deckenfuge ${D - H} mm${k.ausgleich_mm ? ` · Ausgleichslage ${k.ausgleich_mm} mm` : ""}`;
+  const kopf = `Ansicht von ${innen ? "innen" : "außen"} · Deckenfuge ${D - H} mm${k.ausgleich_mm ? ` · Ausgleichslage ${k.ausgleich_mm} mm` : ""}`;
   // Rand so breit, dass die Kopfzeile auch bei kurzen Wänden ganz zu sehen ist (Monospace ≈ 0,6 × Schrift je Zeichen).
   const rand = Math.max(260, Math.round(fs * 2.9), Math.round((kopf.length * 0.6 * fs - L) / 2 + 40));
   const teile = [];
@@ -54,20 +61,25 @@ export function zeichne(el, r) {
     }
   }
 
-  // Verbinder der Fassadenseite
-  for (const p of fa.punkte) {
+  // Verbinder der gezeigten Seite
+  for (const p of punkte) {
     teile.push(`<circle cx="${p.x}" cy="${Y(p.y)}" r="34" fill="#1FAA5F" stroke="#1E1E1E" stroke-width="6"/>`);
   }
 
   // Boden, Bodenblech, Maße
   for (const t of w.base_plate.teile) teile.push(`<rect x="${t.x0_mm}" y="${Y(0)}" width="${t.raster_mm}" height="12" fill="#6B747A"/>`);
   teile.push(`<rect x="-120" y="${Y(0) + 12}" width="${L + 240}" height="40" fill="#1E1E1E"/>`);
+  // Von innen gesehen ist die Wand gespiegelt; die Beschriftungen darunter bleiben lesbar.
+  const bild = innen ? `<g transform="matrix(-1 0 0 1 ${L} 0)">${teile.splice(1).join("")}</g>` : teile.splice(1).join("");
+  teile.push(bild);
   const m = (mm) => (mm / 1000).toFixed(3).replace(/0$/, "").replace(".", ",");
   teile.push(bemassung(0, L, Y(0) + 52 + Math.round(fs * 1.9), `${m(L)} m`, fs));
-  // Blickrichtung: x läuft nach rechts wie in der 3D-Ansicht „Außen“, die Fassadenverbinder liegen vorn.
+  // Blickrichtung: außen läuft x nach rechts wie in der 3D-Ansicht „Außen“, innen gespiegelt.
   teile.push(`<text x="${L / 2}" y="${Y(D) - 60 - Math.round(fs * 0.5)}" text-anchor="middle" font-size="${fs}" fill="#5E5E5E" font-family="ui-monospace, Menlo, monospace">`
     + `${kopf}</text>`);
 
-  const vb = `${-rand} ${-rand} ${L + 2 * rand} ${D + 2 * rand + 60}`;
-  el.innerHTML = `<svg viewBox="${vb}" role="img" aria-label="Wandansicht von außen, ${m(L)} m lang, ${k.lagen} Lagen, ${k.steine} Steine">${teile.join("")}</svg>`;
+  const vbB = L + 2 * rand, vbH = D + 2 * rand + 60;
+  const vb = `${-rand} ${-rand} ${vbB} ${vbH}`;
+  const stil = minHoehe ? ` style="min-width:${Math.round(minHoehe * vbB / vbH)}px"` : "";
+  el.innerHTML = `<svg viewBox="${vb}"${stil} role="img" aria-label="Wandansicht von ${innen ? "innen" : "außen"}, ${m(L)} m lang, ${k.lagen} Lagen, ${k.steine} Steine">${teile.join("")}</svg>`;
 }

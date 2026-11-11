@@ -28,10 +28,14 @@
     <section class="buehne" aria-label="Vorschau">
       <div class="buehne-kopf">
         <div class="tabs" role="tablist" aria-label="Darstellung">
-          <button type="button" role="tab" id="tab3d" aria-controls="ansicht3d" aria-selected="true">3D-Modell</button>
-          <button type="button" role="tab" id="tab2d" aria-controls="ansicht2d" aria-selected="false" tabindex="-1">Ansicht</button>
+          <button type="button" role="tab" id="tab3d" data-ansicht="3d" aria-controls="ansicht3d" aria-selected="true">3D</button>
+          <button type="button" role="tab" id="tabAussen" data-ansicht="aussen" aria-controls="ansicht2d" aria-selected="false" tabindex="-1">Außenansicht</button>
+          <button type="button" role="tab" id="tabInnen" data-ansicht="innen" aria-controls="ansicht2d" aria-selected="false" tabindex="-1">Innenansicht</button>
         </div>
-        <span class="mono klein" id="masse"></span>
+        <span class="kopf-rechts">
+          <span class="mono klein" id="masse"></span>
+          <button type="button" class="link vollbild" id="vollbild" aria-pressed="false">Vollbild</button>
+        </span>
       </div>
 
       <div id="ansicht3d" role="tabpanel" aria-labelledby="tab3d">
@@ -67,12 +71,12 @@
         <p class="erklaerung" id="rueckbauText"></p>
       </div>
 
-      <div id="ansicht2d" role="tabpanel" aria-labelledby="tab2d" hidden>
+      <div id="ansicht2d" role="tabpanel" aria-labelledby="tabAussen" hidden>
         <div class="legende mono klein">
           <span><i class="sw" style="background:#B4B4AE"></i>i3 · 37,5 cm</span>
           <span><i class="sw" style="background:#CFCFCA"></i>i2 · 25 cm</span>
           <span><i class="sw linie"></i>Spannachse</span>
-          <span><i class="sw punkt"></i>Verbinder Fassade</span>
+          <span id="legendePunkt"><i class="sw punkt"></i><span id="legendePunktText">Verbinder Fassade</span></span>
         </div>
         <div class="zeichnung" id="zeichnung"></div>
       </div>

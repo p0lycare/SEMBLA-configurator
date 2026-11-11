@@ -82,9 +82,13 @@ Diese Ereignisnamen gibt es:
 | `innen_gewaehlt` | Innenseite gewählt |
 | `oeffnung` | Tür oder Fenster hinzugefügt |
 | `info` | Reiter geöffnet (So funktioniert's, Stückliste, Wärmeschutz) |
+| `ansicht` | Vorschau gewechselt, `daten.ansicht`: `3d`, `aussen` oder `innen` |
+| `vollbild` | Vorschau im Vollbild geöffnet |
 | `stueckliste_csv` | Stückliste als CSV geladen |
 | `rueckbau_angesehen` | Rückbau-Regler bis zum Ende geschoben |
 | `cta` | Knopf gedrückt, `daten.anlass`: `termin` oder `fassadensystem` |
 | `datenblatt_angefordert` | Datenblatt-Anfrage erfolgreich abgeschickt |
+
+Das Attribut `allow="fullscreen"` am iframe nicht entfernen: Ohne es füllt der Knopf „Vollbild“ nur den iframe statt des Bildschirms.
 
 Zum Ausprobieren gibt es die Testseite `embed/test.html`. Sie wird lokal mit `npx serve` oder einem anderen Webserver auf Port 8000 geöffnet.

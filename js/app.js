@@ -44,9 +44,9 @@ const wahlKennung = () => `${zustand.fassade}|${zustand.innen}|${zustand.ziel}`;
 let modell = null;
 import("./modell3d.js").then((mod) => {
   modell = mod.erstelle($("canvas3d"));
-  if (!modell) { $("glFehler").hidden = false; ansicht("2d"); }
+  if (!modell) { $("glFehler").hidden = false; ansicht("aussen"); }
   else { modell.setze({ ebenen }); aktualisieren(); }
-}).catch(() => { $("glFehler").hidden = false; ansicht("2d"); });
+}).catch(() => { $("glFehler").hidden = false; ansicht("aussen"); });
 
 // ---------- Eingaben ----------
 function pills(el, aktiv, beiKlick) {
@@ -174,16 +174,31 @@ function ebenenZeichnen() {
 }
 ebenenZeichnen();
 
+const ANSICHT_TABS = ["tab3d", "tabAussen", "tabInnen"];
 function ansicht(a) {
   zustand.ansicht = a;
-  for (const [id, wert] of [["tab3d", "3d"], ["tab2d", "2d"]]) {
-    $(id).setAttribute("aria-selected", String(a === wert));
-    $(id).tabIndex = a === wert ? 0 : -1;
+  for (const id of ANSICHT_TABS) {
+    const an = $(id).dataset.ansicht === a;
+    $(id).setAttribute("aria-selected", String(an));
+    $(id).tabIndex = an ? 0 : -1;
   }
   $("ansicht3d").hidden = a !== "3d";
-  $("ansicht2d").hidden = a !== "2d";
+  $("ansicht2d").hidden = a === "3d";
+  if (a !== "3d") {
+    $("ansicht2d").setAttribute("aria-labelledby", a === "innen" ? "tabInnen" : "tabAussen");
+    zeichnen2d();
+  }
   // Hinweise direkt unter das sichtbare Bild, vor die Bedienelemente.
   (a === "3d" ? $("ansicht3d").querySelector(".viewer") : $("zeichnung")).after($("hinweise"));
+}
+/** 2D-Ansicht der gewählten Seite; innen mit den Verbindern der Innenseite (falls es welche gibt). */
+function zeichnen2d() {
+  if (!ergebnis || zustand.ansicht === "3d") return;
+  const seite = zustand.ansicht === "innen" ? "innen" : "aussen";
+  zeichne($("zeichnung"), ergebnis, { seite, minHoehe: 200 });
+  const n = (seite === "innen" ? ergebnis.ia : ergebnis.fa)?.punkte?.length || 0;
+  $("legendePunkt").hidden = !n;
+  $("legendePunktText").textContent = seite === "innen" ? "Verbinder innen" : "Verbinder Fassade";
 }
 function infoTab(b) {
   document.querySelectorAll("#infoTabs [data-tab]").forEach((x) => { x.setAttribute("aria-selected", String(x === b)); x.tabIndex = x === b ? 0 : -1; });
@@ -202,8 +217,22 @@ document.querySelectorAll("[role=tablist]").forEach((liste) => liste.addEventLis
   const ziel = tabs[(j + tabs.length) % tabs.length];
   ziel.focus(); ziel.click();
 }));
-$("tab3d").onclick = () => ansicht("3d");
-$("tab2d").onclick = () => ansicht("2d");
+for (const id of ANSICHT_TABS) $(id).onclick = () => { ansicht($(id).dataset.ansicht); ereignis("ansicht", { ansicht: $(id).dataset.ansicht }); };
+// Vollbild für breite Wände (Feedback Felix 1.2): Die Vorschau samt Reitern füllt das Fenster
+// (CSS-Klasse, geht überall, auch auf dem iPhone); wo der Browser es erlaubt, zusätzlich echtes Vollbild.
+const buehne = document.querySelector(".buehne");
+function vollbild(an) {
+  buehne.classList.toggle("vollbild-an", an);
+  document.documentElement.classList.toggle("vollbild-offen", an);
+  $("vollbild").setAttribute("aria-pressed", String(an));
+  $("vollbild").textContent = an ? "Vollbild beenden" : "Vollbild";
+  if (an && document.fullscreenEnabled && !document.fullscreenElement) buehne.requestFullscreen?.().catch(() => {});
+  if (!an && document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  if (an) ereignis("vollbild");
+}
+$("vollbild").onclick = () => vollbild(!buehne.classList.contains("vollbild-an"));
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && buehne.classList.contains("vollbild-an")) vollbild(false); });
+document.addEventListener("fullscreenchange", () => { if (!document.fullscreenElement && buehne.classList.contains("vollbild-an")) vollbild(false); });
 $("ansicht3d").querySelector(".viewer").after($("hinweise"));
 document.querySelectorAll("[data-blick]").forEach((b) => (b.onclick = () => modell?.blick(b.dataset.blick)));
 
@@ -294,7 +323,7 @@ function aktualisieren() {
   if (linkHinweise.wahl === wahlKennung()) r.hinweise.unshift(...linkHinweise.texte);
   $("hinweise").innerHTML = hinweiseBuehne(r.hinweise);
 
-  zeichne($("zeichnung"), r);
+  zeichnen2d();
   if (!$("anfrage").hidden && $("anfrageBild")) anfrageVorschau();
   modellAktualisieren(r, fassade, innen);
   rueckbauText(+$("rueckbau").value / 100);
