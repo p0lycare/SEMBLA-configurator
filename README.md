@@ -26,7 +26,7 @@ Dann <http://localhost:8000/> öffnen. Die Einbettung lässt sich unter <http://
 | `data/steine.json` | reduzierte Steingeometrie i2/i3 (aus den reduzierten Bauteil-OBJs) |
 | `data/spannteile.json` | Spannteile: Mutter, Kopplungsmutter, Sechskantschraube DIN 933, Einlegeblech (aus den Bauteil-OBJs) |
 | `tools/obj-zu-json.mjs` | wandelt Bauteil-OBJs in diese Netze: `node tools/obj-zu-json.mjs ziel.json name=teil.obj …` |
-| `js/ansicht2d.js`, `js/modell3d.js` | 2D-Wandansicht (SVG) und 3D-Modell (three.js 0.160 vom CDN) |
+| `js/ansicht2d.js`, `js/schnitt2d.js`, `js/modell3d.js` | 2D-Wandansicht außen/innen und Wandschnitt (SVG), 3D-Modell (three.js 0.160 vom CDN) |
 | `js/einbettung.js` | postMessage an sembla.de: Höhe, Formular, Ereignisse |
 | `js/waerme.js` | U-Wert nach DIN EN ISO 6946 und Auslegung der Dämmstärke auf einen festen U-Wert (Voreinstellung U ≤ 0,20) |
 | `js/inhalte.js` | Kennzahlen, Stückliste, Regeln, Wärmeschutz als HTML; gemeinsam für Konfigurator und Datenblatt |

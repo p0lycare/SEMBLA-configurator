@@ -4,6 +4,7 @@
 import { wirksameZwischenpunkte } from "./sembla-core.js";
 import { berechne, zusammenfassung, GRENZEN, DECKENFUGE_MM, OEFFNUNGEN, oeffnungsMasse, masseText } from "./wand.js";
 import { zeichne } from "./ansicht2d.js";
+import { zeichneSchnitt } from "./schnitt2d.js";
 import { eingebettet, hoeheMelden, formularOeffnen, ereignis } from "./einbettung.js";
 import { stueckliste, alsCsv } from "./stueckliste.js";
 import { de, m, mRaster, esc, zustandAusUrl, urlParameter, datenblattParameter, aufbauWahl, kachelnHtml, stuecklisteHtml, stuecklisteKurzHtml, regelnHtml, verwendbarkeitText, waermeHtml } from "./inhalte.js";
@@ -37,6 +38,7 @@ if (!KONFIG_PARAMETER.some((k) => url.has(k))) {
 const zustand = { ...zustandAusUrl(url), ansicht: "3d" };
 delete zustand.fest;   // gespeicherte Dämmstärken gelten nur im Datenblatt; hier wird neu ausgelegt
 let ergebnis = null;
+let gewaehltInnen = null;   // Innenseite der letzten Rechnung, für den Schnitt
 let linkHinweise = null;
 const wahlKennung = () => `${zustand.fassade}|${zustand.innen}|${zustand.ziel}`;
 
@@ -174,7 +176,7 @@ function ebenenZeichnen() {
 }
 ebenenZeichnen();
 
-const ANSICHT_TABS = ["tab3d", "tabAussen", "tabInnen"];
+const ANSICHT_TABS = ["tab3d", "tabAussen", "tabInnen", "tabSchnitt"];
 function ansicht(a) {
   zustand.ansicht = a;
   for (const id of ANSICHT_TABS) {
@@ -183,17 +185,22 @@ function ansicht(a) {
     $(id).tabIndex = an ? 0 : -1;
   }
   $("ansicht3d").hidden = a !== "3d";
-  $("ansicht2d").hidden = a === "3d";
-  if (a !== "3d") {
+  $("ansicht2d").hidden = a !== "aussen" && a !== "innen";
+  $("ansichtSchnitt").hidden = a !== "schnitt";
+  if (a === "aussen" || a === "innen") {
     $("ansicht2d").setAttribute("aria-labelledby", a === "innen" ? "tabInnen" : "tabAussen");
     zeichnen2d();
   }
+  if (a === "schnitt") zeichnenSchnitt();
   // Hinweise direkt unter das sichtbare Bild, vor die Bedienelemente.
-  (a === "3d" ? $("ansicht3d").querySelector(".viewer") : $("zeichnung")).after($("hinweise"));
+  (a === "3d" ? $("ansicht3d").querySelector(".viewer") : a === "schnitt" ? $("schnitt") : $("zeichnung")).after($("hinweise"));
+}
+function zeichnenSchnitt() {
+  if (ergebnis && zustand.ansicht === "schnitt") zeichneSchnitt($("schnitt"), ergebnis, gewaehltInnen, A.materialien);
 }
 /** 2D-Ansicht der gewählten Seite; innen mit den Verbindern der Innenseite (falls es welche gibt). */
 function zeichnen2d() {
-  if (!ergebnis || zustand.ansicht === "3d") return;
+  if (!ergebnis || (zustand.ansicht !== "aussen" && zustand.ansicht !== "innen")) return;
   const seite = zustand.ansicht === "innen" ? "innen" : "aussen";
   zeichne($("zeichnung"), ergebnis, { seite, minHoehe: 200 });
   const n = (seite === "innen" ? ergebnis.ia : ergebnis.fa)?.punkte?.length || 0;
@@ -284,6 +291,7 @@ function modellAktualisieren(r, fassade, innen) {
 
 function aktualisieren() {
   const { roh, innen, ziel, verbinder, waerme: wcfg } = aufbauWahl(A, zustand, { nurFreigegeben: true });
+  gewaehltInnen = innen;
   ergebnis = berechne({ ...zustand, fassade: roh, innen, waerme: wcfg, verbinder });
   const r = ergebnis, k = r.kennzahlen, fassade = r.fassade;
 
@@ -324,6 +332,7 @@ function aktualisieren() {
   $("hinweise").innerHTML = hinweiseBuehne(r.hinweise);
 
   zeichnen2d();
+  zeichnenSchnitt();
   if (!$("anfrage").hidden && $("anfrageBild")) anfrageVorschau();
   modellAktualisieren(r, fassade, innen);
   rueckbauText(+$("rueckbau").value / 100);

@@ -275,3 +275,14 @@ a.knopf { display: inline-block; text-decoration: none; }
 
 /* Breite Zeichnung scrollt in sich, nicht die Seite. */
 .buehne, #ansicht2d { min-width: 0; }
+.schnitt-legende { margin: 0 0 6px; color: var(--text2); }
+.zeichnung.schnitt { overflow: visible; }
+.zeichnung.schnitt svg { max-height: 420px; }
+.schnitt-liste { margin: 10px 0 0; padding-left: 1.6em; font-size: 14px; display: grid; gap: 2px; }
+.schnitt-liste .mono { font-family: var(--f-mono); display: inline-block; min-width: 5.5em; }
+/* Vier Darstellungs-Reiter passen auch auf schmale Handys. */
+.buehne-kopf .tabs { max-width: 100%; }
+@media (max-width: 420px) {
+  .buehne-kopf .tabs button { padding: 8px 9px; font-size: 13px; }
+}
+#ansichtSchnitt { min-width: 0; }

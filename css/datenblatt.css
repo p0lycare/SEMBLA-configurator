@@ -19,7 +19,8 @@
   .app.blatt { padding: 0; max-width: none; gap: 18px; }
   .aktionen, .downloads { display: none; }
   .seite { break-inside: auto; }
-  .seite.regeln, .seite.waerme, .seite.stueck { break-before: page; }
+  .seite.schnitt-seite, .seite.waerme, .seite.stueck { break-before: page; }
+  .schnitt svg { max-height: 90mm; }
   .seite h2 { break-after: avoid; }
   .kachel, .teil, tr { break-inside: avoid; }
   .teilgruppe h4, h3.lieferung, .lieferung-hinweis { break-after: avoid; }

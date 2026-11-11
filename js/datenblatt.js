@@ -3,6 +3,7 @@
 
 import { berechne, zusammenfassung } from "./wand.js";
 import { zeichne } from "./ansicht2d.js";
+import { zeichneSchnitt } from "./schnitt2d.js";
 import { stueckliste } from "./stueckliste.js";
 import { m, zustandAusUrl, urlParameter, aufbauWahl, kachelnHtml, stuecklisteHtml, regelnHtml, hinweiseHtml, waermeHtml, RECHENSTAND, LIEFERUMFANG_TEXT } from "./inhalte.js";
 import { ereignis } from "./einbettung.js";
@@ -26,6 +27,7 @@ const mTitel = (mm) => m(mm).replace(/ m$/, ' <span class="einheit">m</span>');
 $("titel").innerHTML = `Wand ${mTitel(r.kennzahlen.laenge_mm)} × ${mTitel(r.kennzahlen.wandhoehe_mm)}`;
 $("untertitel").textContent = zusammenfassung({ ...zustand, fassade: r.fassade, innen }, r);
 zeichne($("zeichnung"), r);
+zeichneSchnitt($("schnitt"), r, innen, A.materialien);
 $("kacheln").innerHTML = kachelnHtml(r);
 $("lieferumfang").textContent = LIEFERUMFANG_TEXT;
 if (zustand.ersetzt.length) r.hinweise.unshift("Dieser Link enthielt eine Variante, die es nicht mehr gibt. Sie wurde durch die Voreinstellung ersetzt.");

@@ -31,6 +31,7 @@
           <button type="button" role="tab" id="tab3d" data-ansicht="3d" aria-controls="ansicht3d" aria-selected="true">3D</button>
           <button type="button" role="tab" id="tabAussen" data-ansicht="aussen" aria-controls="ansicht2d" aria-selected="false" tabindex="-1">Außenansicht</button>
           <button type="button" role="tab" id="tabInnen" data-ansicht="innen" aria-controls="ansicht2d" aria-selected="false" tabindex="-1">Innenansicht</button>
+          <button type="button" role="tab" id="tabSchnitt" data-ansicht="schnitt" aria-controls="ansichtSchnitt" aria-selected="false" tabindex="-1">Schnitt</button>
         </div>
         <span class="kopf-rechts">
           <span class="mono klein" id="masse"></span>
@@ -79,6 +80,11 @@
           <span id="legendePunkt"><i class="sw punkt"></i><span id="legendePunktText">Verbinder Fassade</span></span>
         </div>
         <div class="zeichnung" id="zeichnung"></div>
+      </div>
+
+      <div id="ansichtSchnitt" role="tabpanel" aria-labelledby="tabSchnitt" hidden>
+        <p class="klein schnitt-legende">Horizontalschnitt durch ein Stück Regelwand, Maße in mm. Grün: Verbinder in der Verbindernut.</p>
+        <div class="zeichnung schnitt" id="schnitt"></div>
       </div>
 
       <div class="hinweise-buehne" id="hinweise" aria-live="polite"></div>

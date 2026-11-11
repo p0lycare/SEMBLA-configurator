@@ -13,6 +13,7 @@ import { traglattenReihen } from "../js/aufbau-geometrie.js";
 import { freieHoehen, nachweis } from "../js/verbinder.js";
 import { wandAlsDxf } from "../js/export-dxf.js";
 import { wandAlsLv, lvDaten } from "../js/export-lv.js";
+import { zeichneSchnitt } from "../js/schnitt2d.js";
 import { wandAlsGaeb } from "../js/export-gaeb.js";
 import { zustandAusUrl, urlParameter, aufbauWahl, datenblattParameter, RECHENSTAND, STANDARD, regelnHtml, feuchteHtml } from "../js/inhalte.js";
 
@@ -435,6 +436,17 @@ test("Wiederverwendbarkeit (B15): mindestens 90 %, nie „alle Steine“", () =>
   const html = regelnHtml(r, inn("sicht")) + regelnHtml(r, inn("sicht"), true, { kurz: true }) + wandAlsLv(r, r.fassade, inn("sicht"));
   assert.ok(/mindestens 90 %/.test(html));
   assert.ok(!/alle \d+ Steine|Alle \d+ Steine|100 %/.test(html));
+});
+
+test("Wandschnitt (1.4): Gesamtdicke wie Kennwert, jede Zone in der Liste", () => {
+  for (const [f, i] of [["schindel", "trockenbau_putz"], ["holzleiste_einlagig", "sicht"], ["sicht", "sicht"]]) {
+    const r = berechne({ laenge_mm: 6000, raumhoehe_mm: 2820, oeffnungen: [T], fassade: fass(f), innen: inn(i), waerme: { kennwerte: A.waerme, ziel_U: 0.2 } });
+    const el = {};
+    const info = zeichneSchnitt(el, r, inn(i), A.materialien);
+    assert.ok(Math.abs(info.gesamt_mm - r.kennzahlen.dicke_gesamt_mm) < 0.01, `${f}/${i}`);
+    assert.equal((el.innerHTML.match(/<li>/g) || []).length, info.schichten);
+    assert.ok(/SEMBLA-Stein/.test(el.innerHTML) && !/NaN|undefined/.test(el.innerHTML), `${f}/${i}`);
+  }
 });
 
 test("Lieferumfang (B23): Polycare liefert Steine, Spannsystem, Anschlüsse und Verbinder, der Rest ist bauseits", () => {
