@@ -81,6 +81,16 @@ function geometrischOk(N, liste) {
 
 const oeffnung = (o) => new Opening(o.g0, o.g1, o.l0, o.l1, o.art);
 
+/**
+ * Vorspannung mit Bodenblech-Aussparungen unter den Türen (Feedback Felix B4): Unter einer Tür
+ * trägt das Blech keinen Stein und wäre eine Schwelle im Durchgang. Der Kern führt die Felder als
+ * manuelle Aussparung ([A-28]) und zerlegt links und rechts davon getrennt.
+ */
+function vorspannung(liste) {
+  const felder = liste.filter((o) => o.art === "tuer").flatMap((o) => Array.from({ length: o.g1 - o.g0 }, (_, i) => o.g0 + i));
+  return felder.length ? { ...VORSPANNUNG, base_plate_aussparungen_grid: felder } : VORSPANNUNG;
+}
+
 // Baubarkeit laut Rechenkern (inkl. Fugenversatz). Über manchen Türstürzen meldet der Kern einen
 // Versatzkonflikt; solche Positionen bietet der Konfigurator nicht an.
 const baubarCache = new Map();
@@ -89,7 +99,7 @@ function baubar(L, H, liste) {
   if (!baubarCache.has(key)) {
     let ok = false;
     try {
-      const w = buildWall("pruef", L, H, liste.map(oeffnung), null, VORSPANNUNG, [], null, true);
+      const w = buildWall("pruef", L, H, liste.map(oeffnung), null, vorspannung(liste), [], null, true);
       ok = w.validation.buildable && w.validation.versatz_ok;
     } catch { ok = false; }
     if (baubarCache.size > 2000) baubarCache.clear();
@@ -224,7 +234,7 @@ export function berechne(cfg) {
   const oeffnungen = oeffnungenAufloesen(L, H, eingabe, cfg.aktiv ?? -1);
 
   // Die Ausgleichslage ist aktiv: die Wand füllt die lichte Höhe bis auf die Deckenfuge ([G-13]).
-  const w = buildWall("SEMBLA-Konfigurator", L, H, oeffnungen.filter(Boolean).map(oeffnung), null, VORSPANNUNG, [], null, true);
+  const w = buildWall("SEMBLA-Konfigurator", L, H, oeffnungen.filter(Boolean).map(oeffnung), null, vorspannung(oeffnungen.filter(Boolean)), [], null, true);
 
   const innen = cfg.innen || { schichten: [] };
   const fa = verbinder(w, cfg.fassade || { schichten: [] }, "FA");

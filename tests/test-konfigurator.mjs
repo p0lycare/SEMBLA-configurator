@@ -406,11 +406,28 @@ test("Feedback Felix: Sechskantschraube, Vergussmasse, Texte nach Gutachten", ()
   assert.ok(sk && /Sechskant/.test(sk.name) && sk.menge === r.w.bom.senkkopfschrauben);
   assert.ok(!roh.some((t) => /Senkkopf/.test(t.name)));
   const v = stueckliste(r, r.fassade, inn("trockenbau_putz")).find((x) => x.id === "untergrund").teile.find((t) => t.symbol === "verguss");
-  assert.ok(v && v.einheit === "lfm" && Math.abs(v.menge - 6) < 1e-9);
+  assert.ok(v && v.einheit === "lfm" && Math.abs(v.menge - Math.round(r.w.base_plate.laenge_mm / 100) / 10) < 1e-9 && v.menge < 6);
   const html = feuchteHtml(r.waerme.feuchte, A.waerme) + regelnHtml(r, inn("trockenbau_putz"));
   assert.ok(!/bremst der Stein|kalte Bahn/.test(html));
   assert.ok(!/ins KVH|in die Latte/.test(html));
   assert.ok(A.waerme.ziele.find((z) => z.id === "eh40").richtwert);
+});
+
+test("Bodenblech unter Türen ausgespart (B4), Fenster ändern nichts", () => {
+  for (const pos of [2, 20, 38]) {
+    const r = berechne({ laenge_mm: 6000, raumhoehe_mm: 2820, oeffnungen: [{ art: "tuer", pos }, F], fassade: fass("schindel"), innen: inn("sicht"),
+      waerme: { kennwerte: A.waerme, ziel_U: 0.2 } });
+    const t = r.w.openings.find((o) => o.art === "tuer"), x0 = t.g0 * 125, x1 = t.g1 * 125;
+    const bp = r.w.base_plate;
+    assert.ok(bp.teile.every((b) => b.x0_mm + b.raster_mm <= x0 || b.x0_mm >= x1), `Blech unter Tür bei ${pos}`);
+    assert.equal(bp.laenge_mm, 6000 - (x1 - x0));
+    assert.equal(bp.teile.reduce((a, b) => a + b.raster_mm, 0), bp.laenge_mm);
+    assert.ok(r.w.ausgleichspunkte.every((p) => p.x_mm <= x0 || p.x_mm >= x1));   // Bereichsenden sind Pflichtauflager ([A-31])
+    const v = stueckliste(r, r.fassade, inn("sicht")).find((g) => g.id === "untergrund").teile[0];
+    assert.ok(Math.abs(v.menge - bp.laenge_mm / 1000) < 0.051);
+  }
+  const ohneTuer = berechne({ laenge_mm: 6000, raumhoehe_mm: 2820, oeffnungen: [F], fassade: fass("sicht"), innen: inn("sicht"), waerme: { kennwerte: A.waerme, ziel_U: 0.2 } });
+  assert.equal(ohneTuer.w.base_plate.laenge_mm, 6000);
 });
 
 test("Lieferumfang (B23): Polycare liefert Steine, Spannsystem, Anschlüsse und Verbinder, der Rest ist bauseits", () => {

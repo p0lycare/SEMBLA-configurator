@@ -285,7 +285,8 @@ export function erstelle(canvas) {
     const mutterM = teil("mutter", zp.map((p) => ({ x: p.x, y: p.y })), blechMat);
     blechM.userData.liste = mutterM.userData.liste = zp;
     einlege.add(blechM, mutterM);
-    const boden = quader([{ x0: 0, x1: L, y0: -10, y1: 0, z0: -THICK, z1: 0 }], stahl);
+    // Bodenbleche als reale Teile; unter Türen ausgespart.
+    const boden = quader(w.base_plate.teile.map((t) => ({ x0: t.x0_mm, x1: t.x0_mm + t.raster_mm, y0: -10, y1: 0, z0: -THICK, z1: 0 })), stahl);
     welt.add(boden);
 
     // Verbinder

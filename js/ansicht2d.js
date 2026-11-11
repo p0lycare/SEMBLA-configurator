@@ -60,7 +60,7 @@ export function zeichne(el, r) {
   }
 
   // Boden, Bodenblech, Maße
-  teile.push(`<rect x="0" y="${Y(0)}" width="${L}" height="12" fill="#6B747A"/>`);
+  for (const t of w.base_plate.teile) teile.push(`<rect x="${t.x0_mm}" y="${Y(0)}" width="${t.raster_mm}" height="12" fill="#6B747A"/>`);
   teile.push(`<rect x="-120" y="${Y(0) + 12}" width="${L + 240}" height="40" fill="#1E1E1E"/>`);
   const m = (mm) => (mm / 1000).toFixed(3).replace(/0$/, "").replace(".", ",");
   teile.push(bemassung(0, L, Y(0) + 52 + Math.round(fs * 1.9), `${m(L)} m`, fs));

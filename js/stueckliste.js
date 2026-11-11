@@ -81,7 +81,7 @@ function anschlussTeile(r) {
 /** Bauseits am Wandfuß: Bett aus Vergussmasse unter den Bodenblechen. */
 function untergrundTeile(r) {
   // Die Menge hängt von der Ebenheit des Untergrunds ab, darum nur die Länge als Richtwert.
-  return [{ symbol: "verguss", name: "Vergussmasse unter den Bodenblechen", menge: Math.round(r.w.length_mm / 100) / 10, einheit: "lfm", ca: true,
+  return [{ symbol: "verguss", name: "Vergussmasse unter den Bodenblechen", menge: Math.round(r.w.base_plate.laenge_mm / 100) / 10, einheit: "lfm", ca: true,
     detail: "Bett je nach Ebenheit des Untergrunds" }];
 }
 
