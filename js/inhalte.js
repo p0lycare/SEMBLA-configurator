@@ -199,7 +199,7 @@ export function regelnHtml(r, innen, mitRegler = true, { kurz = false } = {}) {
     return [
       `<b>Raster:</b> ${m(k.laenge_mm, 3).replace(/0 m$/, " m")} = ${k.laenge_mm / 125} × 12,5 cm, die Stoßfugen von Lage zu Lage versetzt.`,
       `<b>Trocken und vorgespannt:</b> kein Mörtel. ${k.spannachsen} Gewindestangen spannen die Lagen zusammen.`,
-      `<b>Lösbar und zirkulär:</b> ${ausbau ? `${k.verbinder_fa + k.verbinder_ia} Verbinder sitzen in den Nuten, gebohrt oder gedübelt wird nicht. ` : ""}Jede Schicht ist sortenrein trennbar, alle ${k.steine} Steine sind wiederverwendbar.${mitRegler ? " Probieren Sie den Rückbau-Regler." : ""}`,
+      `<b>Lösbar und zirkulär:</b> ${ausbau ? `${k.verbinder_fa + k.verbinder_ia} Verbinder sitzen in den Verbindernuten, gebohrt oder gedübelt wird nicht. ` : ""}Jede Schicht ist sortenrein trennbar, alle ${k.steine} Steine sind wiederverwendbar.${mitRegler ? " Probieren Sie den Rückbau-Regler." : ""}`,
     ].map((t) => `<li><span>${t}</span></li>`).join("");
   }
   const li = [
@@ -207,7 +207,7 @@ export function regelnHtml(r, innen, mitRegler = true, { kurz = false } = {}) {
     `<b>Trocken und vorgespannt:</b> kein Mörtel. ${k.spannachsen} Gewindestangen laufen durch die Kammern und spannen die Lagen zwischen Bodenblech und Spannplatte zusammen. Die Spannachsen haben höchstens 37,5 cm Abstand (drei Raster).`,
   ];
   if (fassade.schichten.length || innen.schichten.length) {
-    li.push(`<b>Lösbare Verbinder:</b> ${k.verbinder_fa + k.verbinder_ia} Verbinder sitzen in den Nuten, immer in Steinmitte und nie in einer Fuge. In den Stein wird nicht gebohrt oder gedübelt; befestigt werden nur die Anschlüsse an Boden und Decke.`);
+    li.push(`<b>Lösbare Verbinder:</b> ${k.verbinder_fa + k.verbinder_ia} Verbinder sitzen in den Verbindernuten, immer in Steinmitte und nie in einer Fuge. In den Stein wird nicht gebohrt oder gedübelt; befestigt werden nur die Anschlüsse an Boden und Decke.`);
     const b = r.bemessung || {}, pz = (x) => `${Math.round(x * 100)} %`;
     const teile = [];
     if (b.fa) teile.push(`außen höchstens ${pz(b.fa.max)} (Windsog in Windzone 2, Gebäude bis 10 m, auch an der Gebäudeecke; das Eigengewicht trägt ein Fußauflager)`);

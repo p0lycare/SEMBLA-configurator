@@ -10,7 +10,7 @@ Nach etwa zwei Minuten soll die Person verstanden haben:
 
 1. **Raster:** alles im 12,5-cm-Raster und in 20-cm-Lagen, nur zwei Steine (i3 und i2).
 2. **Trocken und vorgespannt:** kein Mörtel; Gewindestangen in den Kammern spannen die Wand.
-3. **Anschlussfähig:** Fassade und Innenausbau werden über lösbare Verbinder in den Nuten befestigt.
+3. **Anschlussfähig:** Fassade und Innenausbau werden über lösbare Verbinder in den Verbindernuten befestigt.
 4. **Zirkulär:** alles lässt sich zerstörungsfrei zurückbauen und wiederverwenden.
 5. **Schlank:** 12,5 cm Wand bringen gegenüber dicken Wänden Nutzfläche.
 
@@ -415,5 +415,6 @@ Recherche in Herstellerdatenblättern, Markt Deutschland. Herstellernamen stehen
 - **Kennwerte in Gruppen (Feedback Felix 5.1/B6):** Material (Steine, Spannachsen, Verbinder), Geometrie (Wandfläche, Wanddicke, Lagen), Bauphysik & Gewicht (U-Wert, Gewicht Rohwand), je Gruppe dezent farbig. In jeder Kachel steht die Bezeichnung über der Zahl, die Einheit direkt an der Zahl, die Erläuterung darunter. Der Konfigurator zeigt Steine, Wandfläche, Wanddicke, U-Wert und Gewicht, das Datenblatt alle.
 - **Lieferumfang (Feedback Felix B23, B21):** Die Stückliste ist geteilt in „Lieferung Polycare“ (SEMBLA-Steine, Spannsystem, Boden- und Deckenanschluss mit Boden-, Ausgleichsblechen und Deckenwinkeln, Verbinder FA/IA mit M6-Schrauben) und „Bauseits, Richtwerte“ (Vergussmasse, Fassade samt Fußauflagern, Innenseite). Das Datenblatt nennt auf Seite 1 den Lieferumfang und dass die übrigen Schichten beispielhaft sind; die CSV hat eine Spalte „Lieferung“. Im LV stehen die Verbinder weiter bei Fassade bzw. Innenseite.
 - **Bodenblech unter Türen ausgespart (Feedback Felix B4, Andreas 11.11.2026):** Der Konfigurator übergibt die Rasterfelder jeder Tür als manuelle Bodenblech-Aussparung an den Kern ([A-28]); links und rechts wird getrennt in Standardlängen zerlegt, Ausgleichspunkte und Vergussmasse folgen der belegten Länge. 3D, Zeichnung, Stückliste und LV zeigen die Lücke.
+- **Begriff „Verbindernut“ (Feedback Felix B9, Andreas 11.11.2026):** Die senkrechten Nuten im Stein, in denen die Verbinder sitzen, heißen in allen Texten, Stückliste und LV „Verbindernut“. „Nut und Feder“ der Dämmplatten bleibt davon unberührt.
 - **Datenblatt-Anfrage:** zwei getrennte Häkchen, Pflicht für das Datenblatt und freiwillig für den Kontaktwunsch; dieser steht in der Zusammenfassung an HubSpot (Details in `docs/HUBSPOT.md`).
 - **Gespeicherte Konfiguration:** Die letzte Konfiguration bleibt im Browser (`localStorage`); ein Link mit Parametern hat Vorrang, „Zurücksetzen“ stellt die Voreinstellung her.

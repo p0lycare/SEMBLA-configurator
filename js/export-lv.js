@@ -39,8 +39,8 @@ function position(t, a, seite, flaeche, teile) {
   if (t.symbol === "schraube") return null;   // in Verbinder bzw. senkrechter Lattung enthalten
   if (t.symbol === "verbinder") {
     const schraube = teile.find((x) => x.symbol === "schraube" && x.name.startsWith("Verbinderschraube"));
-    return { kurz: `${n}, lösbar, in der Nut`, menge: t.menge, einheit: "Stk",
-      lang: `Verbinder des Systemherstellers, in die Nut des SEMBLA-Steins gesetzt, immer in Steinmitte und nie in einer Fuge${aussen ? ", Anordnung nach Bemessung" : ""}. Ohne Bohren und Dübeln. `
+    return { kurz: `${n}, lösbar, in der Verbindernut`, menge: t.menge, einheit: "Stk",
+      lang: `Verbinder des Systemherstellers, in die Verbindernut des SEMBLA-Steins gesetzt, immer in Steinmitte und nie in einer Fuge${aussen ? ", Anordnung nach Bemessung" : ""}. Ohne Bohren und Dübeln. `
         + (schraube ? `Mit Verbinderschraube ${schraube.detail.replace(/^M6 × /, "M6 × ")}${/Länge prüfen/.test(schraube.detail) ? "" : " und Unterlegscheibe ≥ 20 mm"}.` : "") };
   }
   if (t.symbol === "winkel") {
@@ -136,7 +136,7 @@ function vorbemerkungen(r, fassade, innen, info) {
   ];
   if (mitFassade) {
     v.push(["Lastannahmen (Vorbemessung)", `${info.windlast ? info.windlast.replace(/\.$/, "") + "; " : "Windzone [2], Geländekategorie […], Gebäudehöhe bis [10 m]; "}am Standort zu prüfen. Verbinderanordnung und -anzahl nach Bemessung des Systemherstellers; Prüfung durch den Tragwerksplaner.`]);
-    if (fassade.uk === "holz") v.push(["Lastabtrag", "Das Eigengewicht der Fassade trägt ein Fußauflager je Achse sowie Auflager über Öffnungen. Die Verbinder nehmen nur Zug aus Windsog und der Ausmitte der Bekleidung auf; die Klemmung der Verbinder entlang der Nut wird nicht angesetzt, weil sie beim Schwinden des Holzes nachlässt."]);
+    if (fassade.uk === "holz") v.push(["Lastabtrag", "Das Eigengewicht der Fassade trägt ein Fußauflager je Achse sowie Auflager über Öffnungen. Die Verbinder nehmen nur Zug aus Windsog und der Ausmitte der Bekleidung auf; die Klemmung der Verbinder entlang der Verbindernut wird nicht angesetzt, weil sie beim Schwinden des Holzes nachlässt."]);
     const luftdicht = innen.schichten?.some((s) => /putz/.test(s.material)) ? "Luftdichte Ebene ist der Innenputz." : fassade.schichten.some((s) => s.material === "bahn") ? "Luftdichte Ebene ist die Dampfbremse." : "";
     v.push(["Wärme- und Feuchteschutz", r.waerme && fassade.daemmstufen
       ? `U-Wert nach DIN EN ISO 6946 ${de(r.waerme.U, 3)} W/(m²K) mit ${daemmText(fassade)} Dämmung (Vorbemessung), mit Bemessungswerten der Wärmeleitfähigkeit nach DIN 4108-4. Tauwasserschutz nach DIN 4108-3 [Nachweis Glaser / hygrothermische Simulation nach DIN EN 15026]. ${luftdicht}`.trim()

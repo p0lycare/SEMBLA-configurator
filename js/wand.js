@@ -292,7 +292,7 @@ export function berechne(cfg) {
   if (zuschnitt.has("stoss_auf_zwischenpunkt")) hinweise.push("Eine Stangenkopplung fiele auf einen Zwischenspannpunkt. Das Planungsteam verschiebt den Stoß in der Ausführungsplanung.");
   for (const [k, name] of [["fa", "Fassade"], ["ia", "innen"]]) {
     const b = bemessung[k];
-    if (b && b.offen) hinweise.push(`Verbinder ${name}: ${b.offen} Verbinder ${b.offen === 1 ? "ist" : "sind"} in der Vorbemessung überlastet (Ausnutzung bis ${Math.round(b.max * 100)} %), und auf der Achse ist keine Nut mehr frei. Das Planungsteam löst das in der Ausführungsplanung.`);
+    if (b && b.offen) hinweise.push(`Verbinder ${name}: ${b.offen} Verbinder ${b.offen === 1 ? "ist" : "sind"} in der Vorbemessung überlastet (Ausnutzung bis ${Math.round(b.max * 100)} %), und auf der Achse ist keine Verbindernut mehr frei. Das Planungsteam löst das in der Ausführungsplanung.`);
   }
   if (ohne) hinweise.push(`${ohne === 1 ? "Eine Öffnung passt" : `${ohne} Öffnungen passen`} nicht mehr in die Wand und ${ohne === 1 ? "wird" : "werden"} nicht gezeichnet.`);
 

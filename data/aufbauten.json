@@ -5,7 +5,7 @@
       "id": "sicht",
       "name": "Ohne Fassade",
       "karte": "Ohne Fassade",
-      "kurz": "Sichtmauerwerk mit Nut-Raster, z. B. für Innenwände oder Ausfachungen unter Dach.",
+      "kurz": "Sichtmauerwerk mit sichtbaren Verbindernuten, z. B. für Innenwände oder Ausfachungen unter Dach.",
       "uk": null,
       "achsraster_mm": null,
       "flaechengewicht_kg_m2": 0,
@@ -612,7 +612,7 @@
     {
       "id": "sicht",
       "name": "Sichtmauerwerk",
-      "kurz": "Unverkleidet, das Nut-Raster bleibt sichtbar und nutzbar.",
+      "kurz": "Unverkleidet, die Verbindernuten bleiben sichtbar und nutzbar.",
       "flaechengewicht_kg_m2": 0,
       "achsraster_mm": null,
       "schichten": [],
@@ -867,7 +867,7 @@
     "fassadenbahn": "#3B3F42"
   },
   "verbinder": {
-    "_hinweis": "Vorbemessung der Verbinder (FA und IA) mit Bemessungswerten F_Rd je Lastrichtung, Verbinder in Steinmitte. Der FA-Verbinder wird vorerst wie der IA-Verbinder angesetzt. Lastrichtungen: Zug = senkrecht zur Wand, Querlast parallel = entlang der senkrechten Nut (Eigengewicht), Querlast senkrecht = quer zur Nut. Interaktion Zug + Querlast (β_N)^1,5 + (β_V)^1,5 ≤ 1 wie bei Ankern (DIN EN 1992-4). Zug hält der Verbinder formschlüssig; entlang der Nut nur über die Klemmung, die die Schraube zum Holz mitspannt und die beim Schwinden des Holzes nachlässt. Deshalb tragen Auflager das Eigengewicht (außen Fußauflager und Auflager über Öffnungen, innen Schwelle). Herleitung in der SEMBLA Planning Suite.",
+    "_hinweis": "Vorbemessung der Verbinder (FA und IA) mit Bemessungswerten F_Rd je Lastrichtung, Verbinder in Steinmitte. Der FA-Verbinder wird vorerst wie der IA-Verbinder angesetzt. Lastrichtungen: Zug = senkrecht zur Wand, Querlast parallel = entlang der senkrechten Verbindernut (Eigengewicht), Querlast senkrecht = quer zur Verbindernut. Interaktion Zug + Querlast (β_N)^1,5 + (β_V)^1,5 ≤ 1 wie bei Ankern (DIN EN 1992-4). Zug hält der Verbinder formschlüssig; entlang der Verbindernut nur über die Klemmung, die die Schraube zum Holz mitspannt und die beim Schwinden des Holzes nachlässt. Deshalb tragen Auflager das Eigengewicht (außen Fußauflager und Auflager über Öffnungen, innen Schwelle). Herleitung in der SEMBLA Planning Suite.",
     "rd_kN": {
       "zug": 0.6,
       "quer_parallel": 0.3,

@@ -93,7 +93,7 @@ function ausbauTeile(r, aufbau, ver, seite) {
   if (!aufbau.schichten.length) return teile;
   const holz = aufbau.uk !== "alu";
   teile.push({ symbol: "verbinder", name: seite === "aussen" ? "Verbinder FA, Fassade" : "Verbinder IA, innen", menge: ver.punkte.length, einheit: "Stk",
-    detail: "lösbar, in der Nut", seite });
+    detail: "lösbar, in der Verbindernut", seite });
   teile.push({ symbol: "schraube", name: `Verbinderschraube M6, ${seite === "aussen" ? "Fassade" : "innen"}`, menge: ver.punkte.length, einheit: "Stk",
     detail: seite === "aussen" ? (holz ? VERBINDERSCHRAUBEN.fa : "zum Wandhalter, Länge prüfen") : VERBINDERSCHRAUBEN.ia, seite });
 
