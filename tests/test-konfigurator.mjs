@@ -405,12 +405,29 @@ test("Feedback Felix: Sechskantschraube, Vergussmasse, Texte nach Gutachten", ()
   const sk = roh.find((t) => t.symbol === "sechskant");
   assert.ok(sk && /Sechskant/.test(sk.name) && sk.menge === r.w.bom.senkkopfschrauben);
   assert.ok(!roh.some((t) => /Senkkopf/.test(t.name)));
-  const v = roh.find((t) => t.symbol === "verguss");
+  const v = stueckliste(r, r.fassade, inn("trockenbau_putz")).find((x) => x.id === "untergrund").teile.find((t) => t.symbol === "verguss");
   assert.ok(v && v.einheit === "lfm" && Math.abs(v.menge - 6) < 1e-9);
   const html = feuchteHtml(r.waerme.feuchte, A.waerme) + regelnHtml(r, inn("trockenbau_putz"));
   assert.ok(!/bremst der Stein|kalte Bahn/.test(html));
   assert.ok(!/ins KVH|in die Latte/.test(html));
   assert.ok(A.waerme.ziele.find((z) => z.id === "eh40").richtwert);
+});
+
+test("Lieferumfang (B23): Polycare liefert Steine, Spannsystem, Anschlüsse und Verbinder, der Rest ist bauseits", () => {
+  const r = berechne({ laenge_mm: 6000, raumhoehe_mm: 2820, oeffnungen: [T, F], fassade: fass("schindel"), innen: inn("trockenbau_putz"),
+    waerme: { kennwerte: A.waerme, ziel_U: 0.2 } });
+  const g = stueckliste(r, r.fassade, inn("trockenbau_putz"));
+  assert.deepEqual(g.map((x) => `${x.id}:${x.lieferung}`), ["wand:polycare", "spann:polycare", "anschluss:polycare", "verbinder:polycare",
+    "untergrund:bauseits", "fassade:bauseits", "innen:bauseits"]);
+  const polycare = new Set(g.filter((x) => x.lieferung === "polycare").flatMap((x) => x.teile.map((t) => t.symbol)));
+  for (const sym of ["i3", "stange", "spannplatte", "bodenblech", "ausgleichsblech", "deckenanschluss", "verbinder", "schraube"]) assert.ok(polycare.has(sym), sym);
+  const bauseits = g.filter((x) => x.lieferung === "bauseits").flatMap((x) => x.teile);
+  assert.ok(!bauseits.some((t) => t.symbol === "verbinder" || /Verbinderschraube/.test(t.name)));
+  assert.ok(bauseits.some((t) => t.symbol === "verguss") && bauseits.some((t) => t.name === "Fußauflager"));
+  // Das LV führt die Verbinder weiter bei Fassade und Innenseite.
+  const lv = lvDaten(r, r.fassade, inn("trockenbau_putz"));
+  assert.ok(lv.titel.filter((t) => /^(Fassade|Innenseite)/.test(t.name)).every((t) => /Verbinder/.test(t.positionen[0].kurz)));
+  assert.ok(lv.titel[0].positionen.some((p) => /Deckenanschluss/.test(p.kurz)));
 });
 
 test("Feuchteschutz: Stein nicht als Dampfbremse angesetzt, verputzte Innenseite ohne Dampfbremse", () => {

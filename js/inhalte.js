@@ -5,6 +5,7 @@ import { ROHWAND, VERBINDERSCHRAUBEN, OEFFNUNGEN, oeffnungsMasse } from "./wand.
 import { THICK } from "./sembla-core.js";
 import { teilBild } from "./teilebilder.js";
 import { daemmText } from "./waerme.js";
+import { LIEFERUNG } from "./stueckliste.js";
 
 export const de = (x, d = 2) => x.toLocaleString("de-DE", { minimumFractionDigits: d, maximumFractionDigits: d });
 /** Millimeter mit Dezimalkomma, Nachkommastelle nur wenn nötig (12,5 mm). */
@@ -142,11 +143,20 @@ export function kachelnHtml(r, { kurz = false } = {}) {
       + `<p class="kgruppe-titel">${titel}</p><div class="kgruppe-kacheln">${liste.map(kachel).join("")}</div></section>`).join("");
 }
 
+/** Zwischentitel, wo der Lieferumfang wechselt (Lieferung Polycare → bauseits). */
+function lieferungWechsel(gruppen, i) {
+  return i === 0 || gruppen[i - 1].lieferung !== gruppen[i].lieferung ? gruppen[i].lieferung : null;
+}
+
+const BAUSEITS_HINWEIS = "Beispielhaft angegeben. Die Planenden planen, bemessen und schreiben diese Schichten eigenverantwortlich aus; es gelten die Angaben der jeweiligen Hersteller.";
+
 export function stuecklisteHtml(gruppen, materialien) {
   const zahl = (t) => (t.einheit === "Stk" ? String(t.menge) : de(t.menge, 1));
-  return gruppen.map((g) => `
-    <section class="teilgruppe">
-      <h3>${g.titel}</h3>
+  return gruppen.map((g, i) => {
+    const l = lieferungWechsel(gruppen, i);
+    return (l ? `<h3 class="lieferung l-${l}">${LIEFERUNG[l]}</h3>${l === "bauseits" ? `<p class="klein lieferung-hinweis">${BAUSEITS_HINWEIS}</p>` : ""}` : "") + `
+    <section class="teilgruppe l-${g.lieferung}">
+      <h4>${g.titel}</h4>
       <div class="teilraster">${g.teile.map((t) => `
         <div class="teil" title="${esc(t.name)}${t.detail ? ` · ${esc(t.detail)}` : ""}">
           ${teilBild(t, materialien)}
@@ -154,7 +164,8 @@ export function stuecklisteHtml(gruppen, materialien) {
           <span class="name">${esc(t.name)}${t.detail ? ` · ${esc(t.detail)}` : ""}</span>
         </div>`).join("")}
       </div>
-    </section>`).join("");
+    </section>`;
+  }).join("");
 }
 
 /** Stückliste in einer Zeile je Gruppe (Konfigurator); die Einzelpositionen stehen darunter aufklappbar. */
@@ -163,9 +174,18 @@ export function stuecklisteKurzHtml(gruppen, r) {
   const stk = (g) => g.teile.filter((t) => t.einheit === "Stk").reduce((a, t) => a + t.menge, 0);
   const zeile = (g) => g.id === "wand" ? `${stk(g)} Steine`
     : g.id === "spann" ? `${k.spannachsen} Spannachsen`
-    : `${g.teile.length} Positionen`;
-  return `<ul class="teile-kurz">${gruppen.map((g) => `<li><b>${esc(g.titel)}</b><span>${zeile(g)}</span></li>`).join("")}</ul>`;
+    : g.id === "verbinder" ? `${k.verbinder_fa + k.verbinder_ia} Verbinder`
+    : g.teile.length === 1 ? "1 Position" : `${g.teile.length} Positionen`;
+  return `<ul class="teile-kurz">${gruppen.map((g, i) => {
+    const l = lieferungWechsel(gruppen, i);
+    return (l ? `<li class="lieferung l-${l}">${LIEFERUNG[l]}</li>` : "") + `<li><b>${esc(g.titel)}</b><span>${zeile(g)}</span></li>`;
+  }).join("")}</ul>`;
 }
+
+/** Hinweis zum Lieferumfang (Datenblatt Seite 1, Text nach Felix, Feedback B23). */
+export const LIEFERUMFANG_TEXT = "Polycare liefert das SEMBLA-Wandsystem: Steine, Spannsystem, Verbinder und Anschlussteile (in der Stückliste unter „Lieferung Polycare“). "
+  + "Alle weiteren Schichten wie Unterkonstruktion, Dämmung, Fassade und Innenausbau sind beispielhaft angegeben. Sie werden durch die Planenden eigenverantwortlich geplant, bemessen und ausgeschrieben; es gelten die Angaben der jeweiligen Hersteller. "
+  + "Statik, Brandschutz, Schallschutz und der energetische Nachweis sind projektbezogen zu führen.";
 
 /**
  * Regeln als Listenpunkte. mitRegler: Hinweis auf den Rückbau-Regler (nur im Konfigurator).

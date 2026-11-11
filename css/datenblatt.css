@@ -21,7 +21,8 @@
   .seite { break-inside: auto; }
   .seite.regeln, .seite.waerme, .seite.stueck { break-before: page; }
   .seite h2 { break-after: avoid; }
-  .kachel, .teil, tr, .teilgruppe h3 { break-inside: avoid; }
+  .kachel, .teil, tr { break-inside: avoid; }
+  .teilgruppe h4, h3.lieferung, .lieferung-hinweis { break-after: avoid; }
   .kachel .wert { font-size: 18pt; }
   .kachel { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .teil { background: #F4F4F2 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }

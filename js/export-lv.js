@@ -183,7 +183,7 @@ export function lvDaten(r, fassade, innen, info = {}) {
     pos({ kurz: `${tuer ? "Türöffnung" : "Fensteröffnung"} im SEMBLA-Raster, ${b} × ${h} m`, menge: 1, einheit: "Stk",
       lang: `${tuer ? "Türöffnung" : "Fensteröffnung"}, Rohbaumaß ${b} × ${h} m (B × H)${op.l0 ? `, Brüstung ${de(op.l0 * 0.2)} m` : ""} im 12,5-cm-Raster, Lage ab ${rm(op.g0 * 0.125)} m vom Wandanfang. Laibungen und Sturz im SEMBLA-System nach Verlegeplan, Spannplatten am Segmentende. ${tuer ? "Zarge und Tür" : "Fenster und Fensterbänke"} sind nicht Teil dieser Position.` });
   }
-  const decke = gruppen.find((g) => g.id === "spann")?.teile.find((t) => t.symbol === "deckenanschluss");
+  const decke = gruppen.find((g) => g.id === "anschluss")?.teile.find((t) => t.symbol === "deckenanschluss");
   if (decke) pos({ kurz: "Deckenanschluss gleitend auf Spannachse", menge: decke.menge, einheit: "Stk",
     lang: `Deckenanschluss als Winkel auf jeder Spannachse, an der Rohdecke befestigt, vertikal gleitend für eine Deckendurchbiegung bis [… mm]. Fuge ${k.deckenfuge_mm} mm mit Mineralwolle bzw. Brandschutzband nach abP gefüllt, beidseitig elastisch geschlossen.` });
   pos({ kurz: "Wandanschluss seitlich", menge: 2 * k.raumhoehe_mm / 1000, einheit: "lfm",
@@ -206,10 +206,12 @@ export function lvDaten(r, fassade, innen, info = {}) {
     const g = gruppen.find((x) => x.id === id);
     if (!g) continue;
     neuerTitel(name, hinweis);
+    // Verbinder stehen in der Stückliste unter „Lieferung Polycare“, im LV bei ihrer Seite.
+    const alle = [...(gruppen.find((x) => x.id === "verbinder")?.teile.filter((t) => t.seite === seite) || []), ...g.teile];
     // Reihenfolge wie beim Bauen: Verbinder, Auflager, Unterkonstruktion von innen nach außen, Lüftung.
     const rang = (t) => (t.symbol === "verbinder" ? 0 : t.art === "schwelle" || t.symbol === "winkel" ? 1 : t.symbol === "lueftung" ? 3 : 2);
-    const teile = [...g.teile].sort((a, b) => rang(a) - rang(b));
-    for (const t of teile) { const p = position(t, aufbau, seite, k.flaeche_m2, g.teile); if (p) pos(p); }
+    const teile = [...alle].sort((a, b) => rang(a) - rang(b));
+    for (const t of teile) { const p = position(t, aufbau, seite, k.flaeche_m2, alle); if (p) pos(p); }
   }
 
   return { vorbemerkungen: vorbemerkungen(r, fassade, innen, info), titel };

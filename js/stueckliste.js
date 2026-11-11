@@ -62,17 +62,27 @@ function spannTeile(r) {
     { symbol: "spannplatte", name: "Spannplatte", menge: b.spannplatten, einheit: "Stk", detail: "120 × 120 × 10 mm" },
     { symbol: "mutter", name: "Spannmutter M10", menge: b.spannmuttern, einheit: "Stk", detail: "eine je Spannplatte" },
   );
+  return teile;
+}
+
+/** Boden- und Deckenanschluss: Bodenbleche, Ausgleichsbleche, Deckenwinkel (Lieferung Polycare). */
+function anschlussTeile(r) {
+  const { w } = r;
+  const teile = [];
   for (const [len, n] of zaehle(w.base_plate.teile, (t) => t.bauteil_mm)) {
     teile.push({ symbol: "bodenblech", name: "Bodenblech", menge: n, einheit: "Stk", detail: `${len} × 125 mm`, laenge: len });
   }
-  // Die Bodenbleche liegen in einem Bett aus Vergussmasse; die Menge hängt von der Ebenheit des
-  // Untergrunds ab, darum nur die Länge als Richtwert.
-  teile.push({ symbol: "verguss", name: "Vergussmasse unter den Bodenblechen", menge: Math.round(w.length_mm / 100) / 10, einheit: "lfm", ca: true,
-    detail: "Bett je nach Ebenheit des Untergrunds" });
   teile.push({ symbol: "ausgleichsblech", name: "Ausgleichsblech", menge: w.ausgleichspunkte.length, einheit: "Stk", detail: "20 × 100 × 8 mm" });
   if (w.deckenanschlusspunkte.length)
     teile.push({ symbol: "deckenanschluss", name: "Deckenanschluss", menge: w.deckenanschlusspunkte.length, einheit: "Stk", detail: "Winkel auf Spannachse" });
   return teile;
+}
+
+/** Bauseits am Wandfuß: Bett aus Vergussmasse unter den Bodenblechen. */
+function untergrundTeile(r) {
+  // Die Menge hängt von der Ebenheit des Untergrunds ab, darum nur die Länge als Richtwert.
+  return [{ symbol: "verguss", name: "Vergussmasse unter den Bodenblechen", menge: Math.round(r.w.length_mm / 100) / 10, einheit: "lfm", ca: true,
+    detail: "Bett je nach Ebenheit des Untergrunds" }];
 }
 
 /** Ausbauteile einer Seite. ver = Verbinderableitung (r.fa / r.ia). */
@@ -82,10 +92,10 @@ function ausbauTeile(r, aufbau, ver, seite) {
   const teile = [];
   if (!aufbau.schichten.length) return teile;
   const holz = aufbau.uk !== "alu";
-  teile.push({ symbol: "verbinder", name: seite === "aussen" ? "Verbinder FA" : "Verbinder IA", menge: ver.punkte.length, einheit: "Stk",
-    detail: "lösbar, in der Nut" });
-  teile.push({ symbol: "schraube", name: "Verbinderschraube M6", menge: ver.punkte.length, einheit: "Stk",
-    detail: seite === "aussen" ? (holz ? VERBINDERSCHRAUBEN.fa : "zum Wandhalter, Länge prüfen") : VERBINDERSCHRAUBEN.ia });
+  teile.push({ symbol: "verbinder", name: seite === "aussen" ? "Verbinder FA, Fassade" : "Verbinder IA, innen", menge: ver.punkte.length, einheit: "Stk",
+    detail: "lösbar, in der Nut", seite });
+  teile.push({ symbol: "schraube", name: `Verbinderschraube M6, ${seite === "aussen" ? "Fassade" : "innen"}`, menge: ver.punkte.length, einheit: "Stk",
+    detail: seite === "aussen" ? (holz ? VERBINDERSCHRAUBEN.fa : "zum Wandhalter, Länge prüfen") : VERBINDERSCHRAUBEN.ia, seite });
 
   const segLaenge = ver.segmente.reduce((a, s) => a + s.y1 - s.y0, 0);
   for (const s of schichtLagen(aufbau.schichten)) {
@@ -161,22 +171,34 @@ function ausbauTeile(r, aufbau, ver, seite) {
   return teile;
 }
 
+/**
+ * Stückliste in Gruppen. lieferung: "polycare" (Lieferumfang Polycare) oder "bauseits"
+ * (beispielhaft, Richtwerte). Verbinder und ihre Schrauben stehen in der Gruppe „Verbinder“
+ * und tragen `seite` ("aussen" | "innen"), damit das LV sie der Fassade bzw. Innenseite zuordnet.
+ */
 export function stueckliste(r, fassade, innen) {
+  const aussen = ausbauTeile(r, fassade, r.fa, "aussen"), drinnen = ausbauTeile(r, innen, r.ia, "innen");
+  const istVerbinder = (t) => !!t.seite;   // nur Verbinder und Verbinderschrauben tragen eine Seite
   const gruppen = [
-    { id: "wand", titel: "SEMBLA-Steine", teile: wandTeile(r) },
-    { id: "spann", titel: "Spannsystem und Anschlüsse", teile: spannTeile(r) },
-    { id: "fassade", titel: `Fassade · ${fassade.name}`, teile: ausbauTeile(r, fassade, r.fa, "aussen") },
-    { id: "innen", titel: `Innenseite · ${innen.name}`, teile: ausbauTeile(r, innen, r.ia, "innen") },
+    { id: "wand", lieferung: "polycare", titel: "SEMBLA-Steine", teile: wandTeile(r) },
+    { id: "spann", lieferung: "polycare", titel: "Spannsystem", teile: spannTeile(r) },
+    { id: "anschluss", lieferung: "polycare", titel: "Boden- und Deckenanschluss", teile: anschlussTeile(r) },
+    { id: "verbinder", lieferung: "polycare", titel: "Verbinder", teile: [...aussen, ...drinnen].filter(istVerbinder) },
+    { id: "untergrund", lieferung: "bauseits", titel: "Untergrund", teile: untergrundTeile(r) },
+    { id: "fassade", lieferung: "bauseits", titel: `Fassade · ${fassade.name}`, teile: aussen.filter((t) => !istVerbinder(t)) },
+    { id: "innen", lieferung: "bauseits", titel: `Innenseite · ${innen.name}`, teile: drinnen.filter((t) => !istVerbinder(t)) },
   ];
   return gruppen.filter((g) => g.teile.some((t) => t.menge > 0)).map((g) => ({ ...g, teile: g.teile.filter((t) => t.menge > 0) }));
 }
 
+export const LIEFERUNG = { polycare: "Lieferung Polycare", bauseits: "Bauseits, Richtwerte" };
+
 /** CSV (Semikolon, deutsches Dezimalkomma) für den Download. */
 export function alsCsv(gruppen) {
-  const zeilen = [["Gruppe", "Teil", "Menge", "Einheit", "Angabe", "überschlägig"]];
+  const zeilen = [["Lieferung", "Gruppe", "Teil", "Menge", "Einheit", "Angabe", "überschlägig"]];
   for (const g of gruppen) for (const t of g.teile) {
     const menge = Number.isInteger(t.menge) ? String(t.menge) : t.menge.toFixed(2).replace(".", ",");
-    zeilen.push([g.titel, t.name, menge, t.einheit, t.detail || "", t.ca ? "ja" : "nein"]);
+    zeilen.push([LIEFERUNG[g.lieferung], g.titel, t.name, menge, t.einheit, t.detail || "", t.ca ? "ja" : "nein"]);
   }
   return zeilen.map((z) => z.map((f) => `"${String(f).replace(/"/g, '""')}"`).join(";")).join("\r\n");
 }

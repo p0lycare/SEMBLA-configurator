@@ -4,7 +4,7 @@
 import { berechne, zusammenfassung } from "./wand.js";
 import { zeichne } from "./ansicht2d.js";
 import { stueckliste } from "./stueckliste.js";
-import { m, zustandAusUrl, urlParameter, aufbauWahl, kachelnHtml, stuecklisteHtml, regelnHtml, hinweiseHtml, waermeHtml, RECHENSTAND } from "./inhalte.js";
+import { m, zustandAusUrl, urlParameter, aufbauWahl, kachelnHtml, stuecklisteHtml, regelnHtml, hinweiseHtml, waermeHtml, RECHENSTAND, LIEFERUMFANG_TEXT } from "./inhalte.js";
 import { ereignis } from "./einbettung.js";
 
 const $ = (id) => document.getElementById(id);
@@ -27,6 +27,7 @@ $("titel").innerHTML = `Wand ${mTitel(r.kennzahlen.laenge_mm)} × ${mTitel(r.ken
 $("untertitel").textContent = zusammenfassung({ ...zustand, fassade: r.fassade, innen }, r);
 zeichne($("zeichnung"), r);
 $("kacheln").innerHTML = kachelnHtml(r);
+$("lieferumfang").textContent = LIEFERUMFANG_TEXT;
 if (zustand.ersetzt.length) r.hinweise.unshift("Dieser Link enthielt eine Variante, die es nicht mehr gibt. Sie wurde durch die Voreinstellung ersetzt.");
 if (zustand.stand && zustand.stand !== RECHENSTAND)
   r.hinweise.unshift("Seit Ihrer Anfrage wurde die Rechnung des Konfigurators aktualisiert. Die Dämmstärken sind wie damals gewählt, U-Wert und Tauwasserschutz nach aktuellem Stand gerechnet.");
