@@ -2,19 +2,26 @@
 
 import { GRID } from "./sembla-core.js";
 
-const RAND = 260;
+// Schrift und Maßlinien wachsen mit der Zeichnung, damit sie bei langen oder hohen Wänden auf dem
+// Bildschirm und im Datenblatt etwa gleich groß lesbar bleiben (90 mm bei der 6-m-Standardwand).
+const schrift = (L, D) => Math.max(90, Math.round(0.014 * Math.max(L, D)));
 
-function bemassung(x0, x1, y, text) {
-  return `<g class="mass"><line x1="${x0}" y1="${y}" x2="${x1}" y2="${y}" stroke="#5E5E5E" stroke-width="6"/>`
-    + `<line x1="${x0}" y1="${y - 40}" x2="${x0}" y2="${y + 40}" stroke="#5E5E5E" stroke-width="6"/>`
-    + `<line x1="${x1}" y1="${y - 40}" x2="${x1}" y2="${y + 40}" stroke="#5E5E5E" stroke-width="6"/>`
-    + `<text x="${(x0 + x1) / 2}" y="${y - 50}" text-anchor="middle" font-size="90" fill="#5E5E5E" font-family="ui-monospace, Menlo, monospace">${text}</text></g>`;
+function bemassung(x0, x1, y, text, fs) {
+  const t = Math.round(fs * 0.45), sw = Math.max(6, Math.round(fs / 15));
+  return `<g class="mass"><line x1="${x0}" y1="${y}" x2="${x1}" y2="${y}" stroke="#5E5E5E" stroke-width="${sw}"/>`
+    + `<line x1="${x0}" y1="${y - t}" x2="${x0}" y2="${y + t}" stroke="#5E5E5E" stroke-width="${sw}"/>`
+    + `<line x1="${x1}" y1="${y - t}" x2="${x1}" y2="${y + t}" stroke="#5E5E5E" stroke-width="${sw}"/>`
+    + `<text x="${(x0 + x1) / 2}" y="${y - Math.round(fs * 0.55)}" text-anchor="middle" font-size="${fs}" fill="#5E5E5E" font-family="ui-monospace, Menlo, monospace">${text}</text></g>`;
 }
 
 export function zeichne(el, r) {
   const { w, fa, kennzahlen: k } = r;
   const L = w.length_mm, H = w.height_mm, D = k.raumhoehe_mm;
   const Y = (y) => D - y;   // SVG-y nach unten
+  const fs = schrift(L, D);
+  const kopf = `Ansicht von außen · Deckenfuge ${D - H} mm${k.ausgleich_mm ? ` · Ausgleichslage ${k.ausgleich_mm} mm` : ""}`;
+  // Rand so breit, dass die Kopfzeile auch bei kurzen Wänden ganz zu sehen ist (Monospace ≈ 0,6 × Schrift je Zeichen).
+  const rand = Math.max(260, Math.round(fs * 2.9), Math.round((kopf.length * 0.6 * fs - L) / 2 + 40));
   const teile = [];
 
   teile.push(`<defs><pattern id="schraffur" width="40" height="40" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">`
@@ -56,10 +63,11 @@ export function zeichne(el, r) {
   teile.push(`<rect x="0" y="${Y(0)}" width="${L}" height="12" fill="#6B747A"/>`);
   teile.push(`<rect x="-120" y="${Y(0) + 12}" width="${L + 240}" height="40" fill="#1E1E1E"/>`);
   const m = (mm) => (mm / 1000).toFixed(3).replace(/0$/, "").replace(".", ",");
-  teile.push(bemassung(0, L, Y(0) + 200, `${m(L)} m`));
-  teile.push(`<text x="${L / 2}" y="${Y(D) - 110}" text-anchor="middle" font-size="90" fill="#5E5E5E" font-family="ui-monospace, Menlo, monospace">`
-    + `Deckenfuge ${D - H} mm${k.ausgleich_mm ? ` · Ausgleichslage ${k.ausgleich_mm} mm` : ""}</text>`);
+  teile.push(bemassung(0, L, Y(0) + 52 + Math.round(fs * 1.9), `${m(L)} m`, fs));
+  // Blickrichtung: x läuft nach rechts wie in der 3D-Ansicht „Außen“, die Fassadenverbinder liegen vorn.
+  teile.push(`<text x="${L / 2}" y="${Y(D) - 60 - Math.round(fs * 0.5)}" text-anchor="middle" font-size="${fs}" fill="#5E5E5E" font-family="ui-monospace, Menlo, monospace">`
+    + `${kopf}</text>`);
 
-  const vb = `${-RAND} ${-RAND} ${L + 2 * RAND} ${D + 2 * RAND + 60}`;
-  el.innerHTML = `<svg viewBox="${vb}" role="img" aria-label="Wandansicht ${m(L)} m lang, ${k.lagen} Lagen, ${k.steine} Steine">${teile.join("")}</svg>`;
+  const vb = `${-rand} ${-rand} ${L + 2 * rand} ${D + 2 * rand + 60}`;
+  el.innerHTML = `<svg viewBox="${vb}" role="img" aria-label="Wandansicht von außen, ${m(L)} m lang, ${k.lagen} Lagen, ${k.steine} Steine">${teile.join("")}</svg>`;
 }

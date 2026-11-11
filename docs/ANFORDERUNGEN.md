@@ -404,8 +404,8 @@ Recherche in Herstellerdatenblättern, Markt Deutschland. Herstellernamen stehen
 
 - **Fassaden (Feedback Felix 4.1/4.2):**
   - Neu: Keramik-Schindel und Holzleisten mit **einlagig gedämmter Holz-UK**: eine Dämmlage, Dampfbremse auf dem Stein, außen eine dünne Holzfaserplatte (Schindel) bzw. eine UV-stabile Fassadenbahn (Holzleisten mit offener Fuge).
-  - Die **zweilagige Holzleiste** (offene Fuge, Holzfaserplatte ohne Fassadenbahn) ist zurückgezogen: In der internen Vorabrechnung war sie der schwächste Aufbau. Alte Links gehen über `ersatz` auf „Holzleisten einlagig“, das Datenblatt rechnet alte Links unverändert.
-  - Angeboten: Ohne Fassade, Schindel zweilagig (Voreinstellung), Schindel einlagig, Holzleisten einlagig. Die zweilagige Schindel bleibt bis zur WUFI-Prüfung.
+  - Die **zweilagige Holzleiste** (offene Fuge, Holzfaserplatte ohne Fassadenbahn) ist zurückgezogen: Hinter der offenen Fuge liegt die Holzfaserplatte ungeschützt in UV-Licht und Schlagregen, und ohne Dampfbremse hat der Aufbau die geringste Feuchtereserve. Alte Links gehen über `ersatz` auf „Holzleisten einlagig“, das Datenblatt rechnet alte Links unverändert.
+  - Angeboten: Ohne Fassade, Schindel zweilagig (Voreinstellung), Schindel einlagig, Holzleisten einlagig. Die zweilagige Schindel bleibt vorerst Voreinstellung.
 - **Höhe nur in vollen Lagen:** Der Regler stellt die **Wandhöhe** von 2,40 bis 4,80 m in 20-cm-Schritten ein, ohne Ausgleichslage. Die Raumhöhe ist Wandhöhe plus Deckenfuge (20 mm). Ältere Links mit freier Raumhöhe werden im Konfigurator auf volle Lagen abgerundet. Titel, Zusammenfassung, IFC und LV nennen die Wandhöhe. Wie ein größerer Spalt zur Decke geschlossen wird, zeigt der Konfigurator vorerst nicht.
 - **Wärmeschutz ohne Förderbezug:** Die Wand ist ein Neubauprodukt. GEG-Höchstwert und BEG-Einzelmaßnahme gelten für Änderungen im Bestand und werden nicht mehr genannt. Der U-Wert steht bei den Kennwerten (Steine, Wanddicke, U-Wert, Gewicht); im Reiter „Wärmeschutz“ steht, auf welchen U-Wert die Dämmstärke ausgelegt ist und dass das Gebäude den energetischen Nachweis führt. Die Auslegung bleibt U ≤ 0,20.
 - **Bedienung (Feedback Nico):**

@@ -194,6 +194,12 @@ details.rechenweg[open] > summary, details.alle-teile[open] > summary { margin-b
 .hinweisliste:empty { display: none; }
 .hinweisliste li { font-size: 14px; color: var(--warn); background: var(--warnbg); border-radius: 8px; padding: 8px 12px; }
 .hinweis { margin: 0; font-size: 13px; color: var(--warn); }
+.hinweise-buehne { display: grid; gap: 6px; }
+.hinweise-buehne:empty { display: none; }
+.hinweisliste li.info { color: var(--text2); background: var(--grund); border: 1px solid var(--linie); }
+.weitere-hinweise summary { cursor: pointer; font-size: 13px; color: var(--text2); width: max-content; }
+.weitere-hinweise summary:focus-visible { outline: 2px solid var(--gruen); outline-offset: 2px; }
+.weitere-hinweise[open] summary { margin-bottom: 6px; }
 
 
 .cta { display: grid; gap: 10px; justify-items: start; }

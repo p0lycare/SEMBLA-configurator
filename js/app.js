@@ -6,7 +6,7 @@ import { berechne, zusammenfassung, GRENZEN, DECKENFUGE_MM, OEFFNUNGEN, oeffnung
 import { zeichne } from "./ansicht2d.js";
 import { eingebettet, hoeheMelden, formularOeffnen, ereignis } from "./einbettung.js";
 import { stueckliste, alsCsv } from "./stueckliste.js";
-import { de, m, mRaster, esc, zustandAusUrl, urlParameter, datenblattParameter, aufbauWahl, kachelnHtml, stuecklisteHtml, stuecklisteKurzHtml, regelnHtml, verwendbarkeitText, hinweiseHtml, waermeHtml } from "./inhalte.js";
+import { de, m, mRaster, esc, zustandAusUrl, urlParameter, datenblattParameter, aufbauWahl, kachelnHtml, stuecklisteHtml, stuecklisteKurzHtml, regelnHtml, verwendbarkeitText, waermeHtml } from "./inhalte.js";
 import { datenblattAnfrage } from "./anfrage.js";
 
 const $ = (id) => document.getElementById(id);
@@ -182,6 +182,8 @@ function ansicht(a) {
   }
   $("ansicht3d").hidden = a !== "3d";
   $("ansicht2d").hidden = a !== "2d";
+  // Hinweise direkt unter das sichtbare Bild, vor die Bedienelemente.
+  (a === "3d" ? $("ansicht3d").querySelector(".viewer") : $("zeichnung")).after($("hinweise"));
 }
 function infoTab(b) {
   document.querySelectorAll("#infoTabs [data-tab]").forEach((x) => { x.setAttribute("aria-selected", String(x === b)); x.tabIndex = x === b ? 0 : -1; });
@@ -202,6 +204,7 @@ document.querySelectorAll("[role=tablist]").forEach((liste) => liste.addEventLis
 }));
 $("tab3d").onclick = () => ansicht("3d");
 $("tab2d").onclick = () => ansicht("2d");
+$("ansicht3d").querySelector(".viewer").after($("hinweise"));
 document.querySelectorAll("[data-blick]").forEach((b) => (b.onclick = () => modell?.blick(b.dataset.blick)));
 
 $("faechern").oninput = (e) => {
@@ -289,7 +292,7 @@ function aktualisieren() {
     ],
   };
   if (linkHinweise.wahl === wahlKennung()) r.hinweise.unshift(...linkHinweise.texte);
-  $("hinweise").innerHTML = hinweiseHtml(r);
+  $("hinweise").innerHTML = hinweiseBuehne(r.hinweise);
 
   zeichne($("zeichnung"), r);
   if (!$("anfrage").hidden && $("anfrageBild")) anfrageVorschau();
@@ -321,6 +324,20 @@ $("csv").onclick = () => {
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   ereignis("stueckliste_csv");
 };
+
+// ---------- Hinweise unter der Vorschau ----------
+// Warnungen zuerst und farbig, Informationen dezent. Ein Hinweis steht offen, weitere klappen auf,
+// damit die Vorschau nicht nach unten wegrutscht. Das Datenblatt zeigt weiter alle als Liste.
+const INFO = /Planungsteam|bietet der Konfigurator nicht mehr an|durch die Voreinstellung ersetzt/;
+function hinweiseBuehne(texte) {
+  if (!texte.length) return "";
+  const sortiert = [...texte].sort((a, b) => INFO.test(a) - INFO.test(b));
+  const li = (t) => `<li class="${INFO.test(t) ? "info" : "warnung"}"><span>${t}</span></li>`;
+  const [erster, ...rest] = sortiert;
+  const offen = $("hinweise").querySelector("details[open]") ? " open" : "";
+  return `<ul class="hinweisliste">${li(erster)}</ul>`
+    + (rest.length ? `<details class="weitere-hinweise"${offen}><summary>${rest.length} weitere${rest.length === 1 ? "r" : ""} Hinweis${rest.length === 1 ? "" : "e"}</summary><ul class="hinweisliste">${rest.map(li).join("")}</ul></details>` : "");
+}
 
 // ---------- Formular ----------
 // Terminbuchung: HubSpot-Terminseite (30 Min., Teams) im neuen Tab.
