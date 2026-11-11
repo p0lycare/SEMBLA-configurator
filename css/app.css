@@ -156,10 +156,19 @@ details.rechenweg[open] > summary, details.alle-teile[open] > summary { margin-b
 .sw.punkt { width: 10px; height: 10px; border-radius: 50%; background: var(--gruen); border: 0; }
 .zeichnung svg { display: block; width: 100%; height: auto; max-height: 520px; }
 
-.kacheln { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; }
-.kachel { border-top: 2px solid var(--text); padding: 10px 2px 2px; display: grid; gap: 4px; }
-.kachel .wert { font-family: var(--f-bold); font-size: 24px; line-height: 1.05; }
-.kachel .bez { font-size: 14px; color: var(--text2); }
+/* Kennwerte: Gruppen nebeneinander, so breit wie ihre Kacheln; Farbe nur als Akzent. */
+.kacheln { display: flex; flex-wrap: wrap; gap: 12px; }
+.kgruppe { --akzent: var(--text); --tint: var(--flaeche); flex: var(--n) 1 calc(var(--n) * 150px); min-width: 0; display: grid; gap: 6px; align-content: start; }
+.g-material { --akzent: #1FAA5F; --tint: #EEF7F1; }
+.g-geometrie { --akzent: #4F6B86; --tint: #EEF2F6; }
+.g-bauphysik { --akzent: #B07A2A; --tint: #F8F2E8; }
+.kgruppe-titel { margin: 0; font: 12px/1.2 var(--f-mono); text-transform: uppercase; letter-spacing: 0.04em; color: var(--text2); }
+.kgruppe-kacheln { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 6px; }
+.kachel { background: var(--tint); border-top: 3px solid var(--akzent); border-radius: 0 0 6px 6px; padding: 8px 10px 10px; display: grid; gap: 2px; align-content: start; }
+.kachel .bez { font-size: 13px; color: var(--text2); }
+.kachel .wert { font-family: var(--f-bold); font-size: 24px; line-height: 1.1; white-space: nowrap; }
+.kachel .wert .einheit { font-family: var(--f-text); font-size: 14px; color: var(--text2); }
+.kachel .detail { font-size: 12px; color: var(--text2); }
 
 .infos { gap: 16px; }
 .infos > .tabs { justify-self: start; max-width: 100%; flex-wrap: wrap; border-radius: 22px; }

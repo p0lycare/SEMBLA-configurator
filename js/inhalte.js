@@ -109,22 +109,37 @@ export function aufbauWahl(A, zustand, { nurFreigegeben = false } = {}) {
   return { roh, innen, ziel, verbinder: A.verbinder, waerme: { kennwerte: A.waerme, ziel_U: ziel.U, ...(fest ? { fest } : {}) } };
 }
 
-/** Kennwerte als Kacheln. kurz: nur Steine, Wanddicke, U-Wert und Gewicht (Konfigurator); das Datenblatt zeigt alle. */
+/**
+ * Kennwerte als Kacheln in drei Gruppen (Material, Geometrie, Bauphysik & Gewicht):
+ * Bezeichnung über der Zahl, Einheit an der Zahl, Erläuterung darunter.
+ * kurz: nur Steine, Wandfläche, Wanddicke, U-Wert und Gewicht (Konfigurator); das Datenblatt zeigt alle.
+ */
 export function kachelnHtml(r, { kurz = false } = {}) {
   const k = r.kennzahlen, fassade = r.fassade;
-  const KURZ = new Set(["steine", "dicke", "u", "gewicht"]);
-  const liste = [
-    ["steine", k.steine, `Steine: ${k.i3} × i3, ${k.i2} × i2`],
-    ["lagen", k.lagen, k.ausgleich_mm ? `Lagen, oben ${k.ausgleich_mm} mm Ausgleich` : "Lagen à 20 cm"],
-    ["achsen", k.spannachsen, "Spannachsen, M10 vorgespannt"],
-    ["verbinder", `${k.verbinder_fa} / ${k.verbinder_ia}`, "Verbinder Fassade / innen"],
-    ["flaeche", `${de(k.flaeche_m2, 1)} m²`, r.w.openings.length ? "Wandfläche ohne Öffnungen" : "Wandfläche"],
-    ["dicke", `${Math.round(k.dicke_gesamt_mm)} mm`, "Wanddicke gesamt"],
-    ...(fassade.daemmstufen ? [["u", `${de(r.waerme.U, 3)}`, `U-Wert W/(m²K), ${daemmText(fassade)} Dämmung`]] : []),
-    ["gewicht", `${de(k.gewicht_rohwand_kg / 1000, 1)} t`, `Rohwand, ${ROHWAND.flaechengewicht_kg_m2} kg/m²`],
+  const KURZ = new Set(["steine", "flaeche", "dicke", "u", "gewicht"]);
+  const gruppen = [
+    ["material", "Material", [
+      ["steine", "Steine", k.steine, "", `${k.i3} × i3, ${k.i2} × i2`],
+      ["achsen", "Spannachsen", k.spannachsen, "", "M10, vorgespannt"],
+      ["verbinder", "Verbinder", `${k.verbinder_fa} / ${k.verbinder_ia}`, "", "Fassade / innen"],
+    ]],
+    ["geometrie", "Geometrie", [
+      ["flaeche", "Wandfläche", de(k.flaeche_m2, 1), "m²", r.w.openings.length ? "ohne Öffnungen" : ""],
+      ["dicke", "Wanddicke", Math.round(k.dicke_gesamt_mm), "mm", "gesamt"],
+      ["lagen", "Lagen", k.lagen, "", k.ausgleich_mm ? `oben ${k.ausgleich_mm} mm Ausgleich` : "à 20 cm"],
+    ]],
+    ["bauphysik", "Bauphysik & Gewicht", [
+      ...(fassade.daemmstufen ? [["u", "U-Wert", de(r.waerme.U, 3), "W/(m²K)", `${daemmText(fassade)} Dämmung`]] : []),
+      ["gewicht", "Gewicht Rohwand", de(k.gewicht_rohwand_kg / 1000, 1), "t", `${ROHWAND.flaechengewicht_kg_m2} kg/m²`],
+    ]],
   ];
-  return liste.filter(([id]) => !kurz || KURZ.has(id))
-    .map(([, w, b]) => `<div class="kachel"><span class="wert">${w}</span><span class="bez">${b}</span></div>`).join("");
+  const kachel = ([, bez, wert, einheit, detail]) => `<div class="kachel"><span class="bez">${bez}</span>`
+    + `<span class="wert">${wert}${einheit ? ` <small class="einheit">${einheit}</small>` : ""}</span>`
+    + (detail ? `<span class="detail">${detail}</span>` : "") + `</div>`;
+  return gruppen.map(([id, titel, liste]) => [id, titel, liste.filter(([kid]) => !kurz || KURZ.has(kid))])
+    .filter(([, , liste]) => liste.length)
+    .map(([id, titel, liste]) => `<section class="kgruppe g-${id}" style="--n:${liste.length}" aria-label="${titel}">`
+      + `<p class="kgruppe-titel">${titel}</p><div class="kgruppe-kacheln">${liste.map(kachel).join("")}</div></section>`).join("");
 }
 
 export function stuecklisteHtml(gruppen, materialien) {

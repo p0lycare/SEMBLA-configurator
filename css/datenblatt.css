@@ -23,6 +23,7 @@
   .seite h2 { break-after: avoid; }
   .kachel, .teil, tr, .teilgruppe h3 { break-inside: avoid; }
   .kachel .wert { font-size: 18pt; }
+  .kachel { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .teil { background: #F4F4F2 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .zeichnung svg { max-height: 120mm; }
 }
