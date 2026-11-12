@@ -74,15 +74,23 @@ function anschlussTeile(r) {
   }
   teile.push({ symbol: "ausgleichsblech", name: "Ausgleichsblech", menge: w.ausgleichspunkte.length, einheit: "Stk", detail: "20 × 100 × 8 mm" });
   if (w.deckenanschlusspunkte.length)
-    teile.push({ symbol: "deckenanschluss", name: "Deckenanschluss", menge: w.deckenanschlusspunkte.length, einheit: "Stk", detail: "Winkel auf Spannachse" });
+    teile.push({ symbol: "deckenanschluss", name: "Deckenwinkel-Set", menge: w.deckenanschlusspunkte.length, einheit: "Stk",
+      detail: "Wandwinkel auf der Spannplatte, Deckenwinkel, Verbindungsmittel untereinander; gleitend, je Spannachse" });
   return teile;
 }
 
-/** Bauseits am Wandfuß: Bett aus Vergussmasse unter den Bodenblechen. */
+/** Bauseits: Bett unter den Bodenblechen, Befestigung der Deckenwinkel, seitliche Anschlüsse. */
 function untergrundTeile(r) {
-  // Die Menge hängt von der Ebenheit des Untergrunds ab, darum nur die Länge als Richtwert.
-  return [{ symbol: "verguss", name: "Vergussmasse unter den Bodenblechen", menge: Math.round(r.w.base_plate.laenge_mm / 100) / 10, einheit: "lfm", ca: true,
+  const { w } = r;
+  // Die Vergussmenge hängt von der Ebenheit des Untergrunds ab, darum nur die Länge als Richtwert.
+  const teile = [{ symbol: "verguss", name: "Vergussmasse unter den Bodenblechen", menge: Math.round(w.base_plate.laenge_mm / 100) / 10, einheit: "lfm", ca: true,
     detail: "Bett je nach Ebenheit des Untergrunds" }];
+  if (w.deckenanschlusspunkte.length)
+    teile.push({ symbol: "schraube", name: "Befestigungssatz Deckenwinkel an der Rohdecke", menge: w.deckenanschlusspunkte.length, einheit: "Stk",
+      detail: "Dübel bzw. Anker nach Deckenart, je Deckenwinkel-Set", material: "stahl" });
+  teile.push({ symbol: "trennstreifen", name: "Trennstreifen Mineralwolle, seitlicher Wandanschluss", menge: Math.round(2 * w.height_mm / 100) / 10, einheit: "lfm", ca: true,
+    detail: "an beiden Wandenden, beidseitig elastisch verfugt; entfällt am freien Wandende", material: "mineralwolle" });
+  return teile;
 }
 
 /** Ausbauteile einer Seite. ver = Verbinderableitung (r.fa / r.ia). */
@@ -184,7 +192,7 @@ export function stueckliste(r, fassade, innen) {
     { id: "spann", lieferung: "polycare", titel: "Spannsystem", teile: spannTeile(r) },
     { id: "anschluss", lieferung: "polycare", titel: "Boden- und Deckenanschluss", teile: anschlussTeile(r) },
     { id: "verbinder", lieferung: "polycare", titel: "Verbinder", teile: [...aussen, ...drinnen].filter(istVerbinder) },
-    { id: "untergrund", lieferung: "bauseits", titel: "Untergrund", teile: untergrundTeile(r) },
+    { id: "untergrund", lieferung: "bauseits", titel: "Untergrund und Anschlüsse", teile: untergrundTeile(r) },
     { id: "fassade", lieferung: "bauseits", titel: `Fassade · ${fassade.name}`, teile: aussen.filter((t) => !istVerbinder(t)) },
     { id: "innen", lieferung: "bauseits", titel: `Innenseite · ${innen.name}`, teile: drinnen.filter((t) => !istVerbinder(t)) },
   ];

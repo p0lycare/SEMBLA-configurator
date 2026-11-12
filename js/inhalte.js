@@ -183,6 +183,18 @@ export function stuecklisteKurzHtml(gruppen, r) {
 }
 
 /**
+ * Anschlüsse an Boden, Decke und Seitenwände (Feedback Robert, Felix B20). Ohne Zahlen, die das
+ * Planungsteam noch bestätigen muss; die stehen als Platzhalter im LV.
+ */
+function anschluesseText(r) {
+  const n = r.w.deckenanschlusspunkte?.length || 0;
+  return `<b>Anschlüsse:</b> Unten steht die Wand auf Bodenblechen, die mit Ausgleichsblechen nach Laser ausgerichtet und mit Vergussmasse unterfüttert werden.`
+    + ` Oben hält ${n ? `auf jeder Spannachse ein Deckenwinkel-Set (${n} Stück)` : "ein Deckenwinkel-Set auf jeder Spannachse"} die Wand seitlich: ein Wandwinkel auf der Spannplatte und ein Deckenwinkel an der Rohdecke, gleitend verbunden.`
+    + ` So kann sich die Decke durchbiegen, ohne auf die Wand zu drücken; die Fuge zur Decke wird gedämmt und elastisch geschlossen.`
+    + ` Seitlich schließt die Wand mit einem Trennstreifen aus Mineralwolle an, beidseitig elastisch verfugt. Ecken und Stöße mit weiteren SEMBLA-Wänden werden im Steinverband verzahnt; das plant das Planungsteam.`;
+}
+
+/**
  * Annahmen für Planende (Datenblatt, Feedback Felix B11): Lastannahmen und Ausnutzung der
  * Verbinder, Lastabtrag des Eigengewichts, Schrauben. Leer ohne Ausbau.
  */
@@ -222,6 +234,7 @@ export function regelnHtml(r, innen, mitRegler = true, { kurz = false } = {}) {
     return [
       `<b>Raster:</b> ${m(k.laenge_mm, 3).replace(/0 m$/, " m")} = ${k.laenge_mm / 125} × 12,5 cm, die Stoßfugen von Lage zu Lage versetzt.`,
       `<b>Trocken und vorgespannt:</b> kein Mörtel. ${k.spannachsen} Gewindestangen spannen die Lagen zusammen.`,
+      `<b>Angeschlossen, nicht eingespannt:</b> unten auf Bodenblechen, oben hält je Spannachse ein gleitender Deckenwinkel die Wand, seitlich trennt ein Mineralwolle-Streifen.`,
       `<b>Lösbar und zirkulär:</b> ${ausbau ? `${k.verbinder_fa + k.verbinder_ia} Verbinder sitzen in den Verbindernuten, gebohrt oder gedübelt wird nicht. ` : ""}Jede Schicht ist sortenrein trennbar, mindestens 90 % der ${k.steine} Steine sind wiederverwendbar.${mitRegler ? " Probieren Sie den Rückbau-Regler." : ""}`,
     ].map((t) => `<li><span>${t}</span></li>`).join("");
   }
@@ -229,6 +242,7 @@ export function regelnHtml(r, innen, mitRegler = true, { kurz = false } = {}) {
   const li = [
     `<b>Raster:</b> ${m(k.laenge_mm, 3).replace(/0 m$/, " m")} = ${k.laenge_mm / 125} × 12,5 cm. Lange i3-Steine füllen die Wand, kurze i2 nur an den Enden. Die Stoßfugen sind von Lage zu Lage versetzt.`,
     `<b>Trocken und vorgespannt:</b> kein Mörtel. ${k.spannachsen} Gewindestangen laufen durch die Kammern und spannen die Lagen zwischen Bodenblech und Spannplatte zusammen. Die Spannachsen haben höchstens 37,5 cm Abstand (drei Raster).${zp ? ` Etwa auf halber Höhe jedes Spannstrangs sitzt ein Einlegeblech mit Mutter (${zp} Stück): Es hält die Stange beim Aufmauern mittig in der Kammer.` : ""}`,
+    anschluesseText(r),
   ];
   if (fassade.schichten.length || innen.schichten.length) {
     li.push(`<b>Lösbare Verbinder:</b> ${k.verbinder_fa + k.verbinder_ia} Verbinder sitzen in den Verbindernuten, immer in Steinmitte und nie in einer Fuge. In den Stein wird nicht gebohrt oder gedübelt; befestigt werden nur die Anschlüsse an Boden und Decke.`);

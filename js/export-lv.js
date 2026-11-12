@@ -184,8 +184,8 @@ export function lvDaten(r, fassade, innen, info = {}) {
       lang: `${tuer ? "Türöffnung" : "Fensteröffnung"}, Rohbaumaß ${b} × ${h} m (B × H)${op.l0 ? `, Brüstung ${de(op.l0 * 0.2)} m` : ""} im 12,5-cm-Raster, Lage ab ${rm(op.g0 * 0.125)} m vom Wandanfang. Laibungen und Sturz im SEMBLA-System nach Verlegeplan, Spannplatten am Segmentende. ${tuer ? "Zarge und Tür" : "Fenster und Fensterbänke"} sind nicht Teil dieser Position.` });
   }
   const decke = gruppen.find((g) => g.id === "anschluss")?.teile.find((t) => t.symbol === "deckenanschluss");
-  if (decke) pos({ kurz: "Deckenanschluss gleitend auf Spannachse", menge: decke.menge, einheit: "Stk",
-    lang: `Deckenanschluss als Winkel auf jeder Spannachse, an der Rohdecke befestigt, vertikal gleitend für eine Deckendurchbiegung bis [… mm]. Fuge ${k.deckenfuge_mm} mm mit Mineralwolle bzw. Brandschutzband nach abP gefüllt, beidseitig elastisch geschlossen.` });
+  if (decke) pos({ kurz: "Deckenwinkel-Set gleitend auf Spannachse", menge: decke.menge, einheit: "Stk",
+    lang: `Deckenanschluss als Deckenwinkel-Set auf jeder Spannachse: Wandwinkel auf der Spannplatte, Deckenwinkel an der Rohdecke, untereinander gleitend verbunden, für eine Deckendurchbiegung bis [… mm]. Befestigung an der Rohdecke mit Dübeln bzw. Ankern nach Deckenart und Zulassung, [Fabrikat/Typ nach Statik]. Fuge ${k.deckenfuge_mm} mm mit Mineralwolle bzw. Brandschutzband nach abP gefüllt, beidseitig elastisch geschlossen.` });
   pos({ kurz: "Wandanschluss seitlich", menge: 2 * k.raumhoehe_mm / 1000, einheit: "lfm",
     lang: "Anschluss an flankierende Bauteile nach Systemplanung, Trennstreifen aus Mineralwolle, Fuge beidseitig elastisch geschlossen. Menge für Anschlüsse an beiden Wandenden; bei freiem Wandende entfällt sie." });
 

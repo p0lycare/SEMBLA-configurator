@@ -464,6 +464,19 @@ test("B11/B19: Verbinder kurz für Kunden, Annahmen für Planende, Einlegebleche
   assert.ok(eb && /mittig/.test(eb.detail));
 });
 
+test("Anschlüsse (Robert, B20): Text für Kunden und Datenblatt, bauseitige Anschlussteile in der Stückliste", () => {
+  const r = berechne({ laenge_mm: 6000, raumhoehe_mm: 2820, oeffnungen: [T], fassade: fass("sicht"), innen: inn("sicht"), waerme: { kennwerte: A.waerme, ziel_U: 0.2 } });
+  assert.ok(/Angeschlossen, nicht eingespannt/.test(regelnHtml(r, inn("sicht"), true, { kurz: true })));
+  const voll = regelnHtml(r, inn("sicht"), false);
+  assert.ok(/<b>Anschlüsse:<\/b>/.test(voll) && /Deckenwinkel-Set \(\d+ Stück\)/.test(voll) && /Trennstreifen/.test(voll));
+  assert.ok(!/\[…/.test(voll));   // Platzhalter nur im LV
+  const g = stueckliste(r, r.fassade, inn("sicht"));
+  assert.ok(g.find((x) => x.id === "anschluss").teile.some((t) => t.name === "Deckenwinkel-Set"));
+  const bau = g.find((x) => x.id === "untergrund").teile;
+  assert.equal(bau.find((t) => /Rohdecke/.test(t.name)).menge, r.w.deckenanschlusspunkte.length);
+  assert.ok(Math.abs(bau.find((t) => t.symbol === "trennstreifen").menge - 2 * r.w.height_mm / 1000) < 0.051);
+});
+
 test("Lieferumfang (B23): Polycare liefert Steine, Spannsystem, Anschlüsse und Verbinder, der Rest ist bauseits", () => {
   const r = berechne({ laenge_mm: 6000, raumhoehe_mm: 2820, oeffnungen: [T, F], fassade: fass("schindel"), innen: inn("trockenbau_putz"),
     waerme: { kennwerte: A.waerme, ziel_U: 0.2 } });
@@ -478,7 +491,7 @@ test("Lieferumfang (B23): Polycare liefert Steine, Spannsystem, Anschlüsse und 
   // Das LV führt die Verbinder weiter bei Fassade und Innenseite.
   const lv = lvDaten(r, r.fassade, inn("trockenbau_putz"));
   assert.ok(lv.titel.filter((t) => /^(Fassade|Innenseite)/.test(t.name)).every((t) => /Verbinder/.test(t.positionen[0].kurz)));
-  assert.ok(lv.titel[0].positionen.some((p) => /Deckenanschluss/.test(p.kurz)));
+  assert.ok(lv.titel[0].positionen.some((p) => /Deckenwinkel-Set/.test(p.kurz) && /Rohdecke mit Dübeln/.test(p.lang)));
 });
 
 test("Feuchteschutz: Stein nicht als Dampfbremse angesetzt, verputzte Innenseite ohne Dampfbremse", () => {

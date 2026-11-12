@@ -68,6 +68,7 @@ export function teilBild(t, farben) {
       + Array.from({ length: 15 }, (_, i) => `<line x1="${62 + i * 4}" y1="45.5" x2="${64 + i * 4}" y2="54.5" stroke="${K.stahlDunkel}" stroke-width="1"/>`).join(""));
     case "spannplatte": return svg(`<rect x="50" y="20" width="60" height="60" rx="2" fill="${K.stahl}" ${linie}/><circle cx="80" cy="50" r="7" fill="#FDFDFD" ${linie}/>`);
     case "einlegeblech": return svg(`<rect x="38" y="30" width="84" height="40" rx="3" fill="${K.stahl}" ${linie}/>` + sechseck(80, 50, 13, K.stahlDunkel) + `<circle cx="80" cy="50" r="5" fill="#FDFDFD" ${linie}/>`);
+    case "trennstreifen": return svg(`<rect x="72" y="18" width="16" height="64" fill="#D9CE8E" ${linie}/><path d="M72 30 L88 38 M72 46 L88 54 M72 62 L88 70" stroke="#8A8A85" stroke-width="1.5"/>`);
     case "verguss": return svg(`<rect x="30" y="44" width="100" height="10" fill="${K.stahl}" ${linie}/><path d="M26 54 Q40 60 54 56 T82 57 T110 56 T134 54 V66 H26 Z" fill="#B9B6AC" ${linie}/>`);
     case "ausgleichsblech": return svg(`<rect x="72" y="20" width="16" height="60" fill="${K.stahl}" ${linie}/>`);
     case "deckenanschluss": return svg(`<path d="M45 25 H75 V65 H115 V75 H65 V35 H45 Z" fill="${K.stahl}" ${linie}/><circle cx="95" cy="70" r="2.5" fill="#FDFDFD" ${linie}/><circle cx="70" cy="45" r="2.5" fill="#FDFDFD" ${linie}/>`);
