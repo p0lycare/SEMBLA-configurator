@@ -213,6 +213,29 @@ $("fassaden").innerHTML = A.fassaden.filter(FREI).map((f) => `
   </button>`).join("");
 $("innen").innerHTML = A.innen.filter(FREI).map((f) => `<button type="button" data-wert="${f.id}">${esc(f.name)}</button>`).join("");
 
+// ---------- Mini-Vorschau (Handy) ----------
+// Solange die Eingaben im Bild sind und die Vorschau nicht, steht oben ein schmaler Streifen mit
+// der 2D-Wand und den Kennwerten. Eingebettet (kompakt) nicht: Im iframe mit voller Höhe gäbe es
+// kein „oben“, das mitläuft.
+{
+  const mobil = matchMedia("(max-width: 999px)");
+  const sicht = { buehne: true, eingaben: false };
+  const pruefen = () => {
+    const an = mobil.matches && !document.documentElement.classList.contains("kompakt") && !sicht.buehne && sicht.eingaben;
+    if (an === !$("mini").hidden) return;
+    $("mini").hidden = !an;
+    if (an && ergebnis) zeichne($("miniBild"), ergebnis);
+  };
+  const io = new IntersectionObserver((eintraege) => {
+    for (const e of eintraege) sicht[e.target.classList.contains("buehne") ? "buehne" : "eingaben"] = e.isIntersecting;
+    pruefen();
+  }, { rootMargin: "-90px 0px 0px 0px" });
+  io.observe(document.querySelector(".buehne"));
+  io.observe(document.querySelector(".eingaben"));
+  mobil.addEventListener("change", pruefen);
+  $("mini").onclick = () => document.querySelector(".buehne").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
 // ---------- Ansicht ----------
 const ebenen = { steine: true, spann: true, verbinder: true, fassade: true, innen: true };
 const EBENEN_NAMEN = { steine: "Steine", spann: "Spannsystem", verbinder: "Verbinder", fassade: "Fassade", innen: "Innen" };
@@ -243,8 +266,8 @@ function ansicht(a) {
     zeichnen2d();
   }
   if (a === "schnitt") zeichnenSchnitt();
-  // Hinweise direkt unter das sichtbare Bild, vor die Bedienelemente.
-  (a === "3d" ? $("ansicht3d").querySelector(".viewer") : a === "schnitt" ? $("schnitt") : $("zeichnung")).after($("hinweise"));
+  // Kennwert-Zeile und Hinweise direkt unter das sichtbare Bild, vor die Bedienelemente.
+  (a === "3d" ? $("ansicht3d").querySelector(".viewer") : a === "schnitt" ? $("schnitt") : $("zeichnung")).after($("kennzeile"), $("hinweise"));
 }
 function zeichnenSchnitt() {
   if (ergebnis && zustand.ansicht === "schnitt") zeichneSchnitt($("schnitt"), ergebnis, gewaehltInnen, A.materialien);
@@ -293,7 +316,7 @@ if (window.self !== window.top && !document.fullscreenEnabled) $("vollbild").hid
 $("vollbild").onclick = () => vollbild(!buehne.classList.contains("vollbild-an"));
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && buehne.classList.contains("vollbild-an")) vollbild(false); });
 document.addEventListener("fullscreenchange", () => { if (!document.fullscreenElement && buehne.classList.contains("vollbild-an")) vollbild(false); });
-$("ansicht3d").querySelector(".viewer").after($("hinweise"));
+$("ansicht3d").querySelector(".viewer").after($("kennzeile"), $("hinweise"));
 document.querySelectorAll("[data-blick]").forEach((b) => (b.onclick = () => modell?.blick(b.dataset.blick)));
 
 $("faechern").oninput = (e) => {
@@ -361,6 +384,12 @@ function aktualisieren() {
   oeffnungenZeichnen(r);
 
   $("masse").textContent = `${mRaster(k.laenge_mm)} × ${m(k.wandhoehe_mm)}`;
+  // Die wichtigsten Kennwerte direkt unter dem Bild (Review 12.11.: die Kacheln liegen unter dem Falz).
+  const kenn = [`${k.steine} Steine`, `${Number.isInteger(k.dicke_gesamt_mm) ? k.dicke_gesamt_mm : de(k.dicke_gesamt_mm, 1)} mm dick`,
+    ...(r.waerme?.U ? [`U ${de(r.waerme.U, 3)} W/(m²K)`] : []), `${de(k.gewicht_rohwand_kg / 1000, 1)} t`];
+  $("kennzeile").innerHTML = kenn.map((t) => `<span>${t}</span>`).join("");
+  $("miniKenn").textContent = `${mRaster(k.laenge_mm)} × ${m(k.wandhoehe_mm)} · ${kenn.join(" · ")}`;
+  if (!$("mini").hidden) zeichne($("miniBild"), r);
 
   $("kacheln").innerHTML = kachelnHtml(r, { kurz: true });
   // Der aufgeklappte Rechenweg bleibt beim Neuzeichnen offen.

@@ -87,8 +87,15 @@
         <div class="zeichnung schnitt" id="schnitt"></div>
       </div>
 
+      <p class="kennzeile mono" id="kennzeile"></p>
       <div class="hinweise-buehne" id="hinweise" aria-live="polite"></div>
     </section>
+
+    <!-- Handy: mitlaufende Mini-Vorschau, solange die Eingaben im Bild sind und die Vorschau nicht -->
+    <button type="button" class="mini-vorschau" id="mini" hidden aria-label="Zur Vorschau springen">
+      <span class="mini-bild" id="miniBild" aria-hidden="true"></span>
+      <span class="kennzeile mono" id="miniKenn"></span>
+    </button>
 
     <section class="panel eingaben" aria-label="Eingaben">
       <div class="schritt">
