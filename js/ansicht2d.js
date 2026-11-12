@@ -61,10 +61,10 @@ export function zeichne(el, r, { seite = "aussen", minHoehe = 0 } = {}) {
     teile.push(`<rect x="${ko.x0}" y="${Y(y1)}" width="${ko.x1 - ko.x0}" height="${y1 - y0}" fill="#D0342C" fill-opacity=".22" stroke="#D0342C" stroke-width="14" stroke-dasharray="40 24"/>`);
   }
 
-  // Spannachsen (Segmente)
+  // Spannachsen (Segmente), blau; die Verbinder sind grün (Feedback Felix 2.1)
   for (const col of w.tension_columns) {
     for (const sg of col.segments) {
-      teile.push(`<line x1="${col.x_mm}" y1="${Y(sg.z0_mm)}" x2="${col.x_mm}" y2="${Y(sg.z1_mm)}" stroke="#1FAA5F" stroke-width="22" stroke-opacity=".9"/>`);
+      teile.push(`<line x1="${col.x_mm}" y1="${Y(sg.z0_mm)}" x2="${col.x_mm}" y2="${Y(sg.z1_mm)}" stroke="#2F6DB5" stroke-width="22" stroke-opacity=".9"/>`);
     }
   }
 

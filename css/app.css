@@ -162,7 +162,7 @@ details.rechenweg[open] > summary, details.alle-teile[open] > summary { margin-b
 .legende { display: flex; flex-wrap: wrap; gap: 6px 16px; }
 .legende span { display: inline-flex; align-items: center; gap: 6px; }
 .sw { display: inline-block; width: 18px; height: 10px; border: 1px solid #8A8A85; }
-.sw.linie { width: 3px; height: 12px; background: var(--gruen); border: 0; }
+.sw.linie { width: 3px; height: 12px; background: #2F6DB5; border: 0; }   /* Spannachse blau, Verbinder grün */
 .sw.punkt { width: 10px; height: 10px; border-radius: 50%; background: var(--gruen); border: 0; }
 .zeichnung { overflow-x: auto; }
 .zeichnung svg { display: block; width: 100%; height: auto; max-height: 520px; }
