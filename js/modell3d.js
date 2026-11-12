@@ -247,6 +247,35 @@ export function erstelle(canvas) {
       im.userData.liste = liste; steine.add(im); return im;
     });
 
+    // Rückbau auf Paletten (Feedback Felix 1.8): Die Steine wandern Lage für Lage von oben auf
+    // Europaletten an der Innenseite, am Ende liegen nur die Bodenbleche. Je Palette 5 Lagen à
+    // 3 × 6 Steine (Plätze 375 × 125 mm), Paletten in Reihen entlang der Wand.
+    const PAL = { b: 1200, t: 800, h: 144, abstand: 1400, reihe: 1100, jeLage: 18, lagen: 5 };
+    const abbau = [];
+    steinMeshes.forEach((im, mi) => im.userData.liste.forEach((s, i) => abbau.push({ mi, i, s })));
+    abbau.sort((a, b) => b.s.li - a.s.li || a.s.x - b.s.x);
+    const proPalette = PAL.jeLage * PAL.lagen, nPal = Math.max(1, Math.ceil(abbau.length / proPalette));
+    const jeReihe = Math.max(1, Math.floor((L + 600) / PAL.abstand));
+    const palOrt = (p) => ({ x: (p % jeReihe) * PAL.abstand, z: -THICK - 900 - Math.floor(p / jeReihe) * PAL.reihe });
+    abbau.forEach((a, k) => {
+      const p = Math.floor(k / proPalette), r = k % proPalette, ort = palOrt(p);
+      const lage = Math.floor(r / PAL.jeLage), platz = r % PAL.jeLage;
+      a.ziel = { x: ort.x + 37.5 + (platz % 3) * 375, y: PAL.h + lage * 200, z: ort.z - 25 - Math.floor(platz / 3) * 125 };
+      a.t0 = 0.6 + 0.36 * k / abbau.length;
+    });
+    const lagenStart = {};
+    for (const a of abbau) lagenStart[a.s.li] = Math.min(lagenStart[a.s.li] ?? 1, a.t0);
+    const holzM = mat(farben.holz || "#D9B47C", { roughness: 0.9 });
+    const palBoxen = [];
+    for (let p = 0; p < nPal; p++) {
+      const { x, z } = palOrt(p);
+      palBoxen.push({ x0: x, x1: x + PAL.b, y0: PAL.h - 22, y1: PAL.h, z0: z - PAL.t, z1: z });
+      palBoxen.push({ x0: x, x1: x + PAL.b, y0: 0, y1: 22, z0: z - PAL.t, z1: z });
+      for (const bx of [0, PAL.b / 2 - 72, PAL.b - 145]) for (const bz of [0, PAL.t / 2 - 50, PAL.t - 100])
+        palBoxen.push({ x0: x + bx, x1: x + bx + 145, y0: 22, y1: PAL.h - 22, z0: z - bz - 100, z1: z - bz });
+    }
+    const paletten = quader(palBoxen, holzM);
+
     // Spannsystem: Gewindestange je Segment, Kopplungsmuttern an den Stößen. Am Wandfuß
     // Sechskantschraube (DIN 933) von unten durchs Bodenblech in die Kopplungsmutter, die Stange
     // steckt zur Hälfte darin.
@@ -301,9 +330,10 @@ export function erstelle(canvas) {
     const iGruppe = new THREE.Group(); innenG.forEach((g) => iGruppe.add(g));
 
     // Boden
-    const flur = new THREE.Mesh(new THREE.BoxGeometry(L + 3000, 40, 4000), mat("#E4E4DF", { roughness: 1 }));
-    flur.position.set(L / 2, -30, -THICK / 2);
-    welt.add(steine, spann, einlege, verb, fGruppe, iGruppe, flur);
+    const tiefe = 4000 + Math.ceil(nPal / jeReihe) * PAL.reihe;
+    const flur = new THREE.Mesh(new THREE.BoxGeometry(L + 3000, 40, tiefe), mat("#E4E4DF", { roughness: 1 }));
+    flur.position.set(L / 2, -30, 2000 - tiefe / 2);
+    welt.add(steine, spann, einlege, verb, fGruppe, iGruppe, flur, paletten);
     // Kollision: gewünschte Lage der zuletzt bewegten Öffnung als roter, durchscheinender Kasten.
     const ko = r.kollision;
     if (ko && w.courses[ko.l0] && w.courses[ko.l1 - 1]) {
@@ -315,7 +345,7 @@ export function erstelle(canvas) {
     const reihenfolge = [...aussen, ...innenG].sort((a, b) => b.userData.tiefe - a.userData.tiefe);
 
     const neu = !st || st.L !== L || st.H !== H;
-    st = { L, H, lagen: w.courses.length, steinMeshes, spann, einlege, einlegeBasis: [blechM, mutterM].map((m) => { const a = new THREE.Matrix4(); return [...Array(m.count).keys()].map((i) => { m.getMatrixAt(i, a); return a.clone(); }); }), verb, fGruppe, iGruppe, aussen, innenG, reihenfolge };
+    st = { L, H, lagen: w.courses.length, steinMeshes, abbau, lagenStart, paletten, spann, einlege, einlegeBasis: [blechM, mutterM].map((m) => { const a = new THREE.Matrix4(); return [...Array(m.count).keys()].map((i) => { m.getMatrixAt(i, a); return a.clone(); }); }), verb, fGruppe, iGruppe, aussen, innenG, reihenfolge };
     anwenden();
     if (neu) blick("schraeg");
     anfordern();
@@ -342,23 +372,20 @@ export function erstelle(canvas) {
     st.spann.position.y = sanft(k(0.38, 0.58)) * (st.H + 900);
     st.spann.visible = e.spann && k(0.38, 0.6) < 1;
 
-    // Phase C (0,6–1): Lage für Lage abheben
-    const pc = sanft(k(0.6, 1));
+    // Phase C (0,6–1): Stein für Stein, Lage für Lage von oben auf die Paletten
     const o = new THREE.Object3D();
-    for (const im of st.steinMeshes) {
-      im.userData.liste.forEach((s, i) => {
-        o.position.set(s.x, s.y + pc * s.li * 110, 0); o.scale.set(1, s.sy, 1); o.updateMatrix(); im.setMatrixAt(i, o.matrix);
-      });
-      im.instanceMatrix.needsUpdate = true; im.visible = e.steine;
+    for (const a of st.abbau) {
+      const p = sanft(k(a.t0, a.t0 + 0.04)), s = a.s, z = a.ziel;
+      o.position.set(s.x + (z.x - s.x) * p, s.y + (z.y - s.y) * p + Math.sin(Math.PI * p) * 500, z.z * p);
+      o.scale.set(1, p < 1 ? s.sy : 1, 1); o.updateMatrix();
+      st.steinMeshes[a.mi].setMatrixAt(a.i, o.matrix);
     }
-    // Einlegebleche heben mit ihrer Lage ab und schweben dabei sichtbar in der Fuge darüber; sie
-    // gehören zum Spannsystem, bleiben aber beim Ziehen der Stangen liegen.
-    const hub = new THREE.Matrix4();
+    for (const im of st.steinMeshes) { im.instanceMatrix.needsUpdate = true; im.visible = e.steine; }
+    st.paletten.visible = e.steine && t > 0.55;
+    // Einlegebleche liegen auf ihrer Lage, bis diese abgetragen wird; dann kommen sie mit heraus.
+    const null0 = new THREE.Matrix4().makeScale(0, 0, 0);
     st.einlege.children.forEach((im, j) => {
-      im.userData.liste.forEach((p, i) => {
-        hub.makeTranslation(0, pc * (p.li * 110 + 55), 0).multiply(st.einlegeBasis[j][i]);
-        im.setMatrixAt(i, hub);
-      });
+      im.userData.liste.forEach((p, i) => im.setMatrixAt(i, t >= (st.lagenStart[p.li] ?? 1) ? null0 : st.einlegeBasis[j][i]));
       im.instanceMatrix.needsUpdate = true;
     });
     st.einlege.visible = e.spann;
