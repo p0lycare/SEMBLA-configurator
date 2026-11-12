@@ -10,6 +10,7 @@
   Adresse: https://konfigurator.sembla.de (seit 03.11.2026; die alte github.io-Adresse leitet dorthin weiter).
 
   Cookiebot: data-cookieconsent="ignore" ist nötig, sonst blockiert das automatische Blockieren den iframe.
+  allow="fullscreen" ist nötig für den Knopf „Vollbild“ der Vorschau.
   Der Konfigurator setzt selbst keine Cookies und trackt nichts; Terminbuchung und Datenblatt-Anfrage laufen
   innerhalb des iframes (HubSpot).
 
@@ -17,8 +18,9 @@
     { typ: "sembla-konfigurator:hoehe",    hoehe: 2140 }
     { typ: "sembla-konfigurator:formular", anlass: "fassadensystem", zusammenfassung: "Wand 6,00 × 2,85 m · …" }
     { typ: "sembla-konfigurator:ereignis", name, daten }
-      name: fassade_gewaehlt | innen_gewaehlt | oeffnung | info | stueckliste_csv | rueckbau_angesehen
-            | cta (daten.anlass: termin | fassadensystem) | datenblatt_angefordert
+      name: fassade_gewaehlt | innen_gewaehlt | oeffnung | oeffnung_position | info | ansicht | vollbild
+            | stueckliste_csv | rueckbau_angesehen | cta (daten.anlass: termin | fassadensystem)
+            | datenblatt_angefordert   (Liste mit Bedeutung: embed/README.md)
 -->
 <div id="sembla-konfigurator">
   <iframe

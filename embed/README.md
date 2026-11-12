@@ -1,8 +1,8 @@
 # SEMBLA-Konfigurator auf sembla.de einbinden (für die Agentur)
 
-Stand: 03.11.2026
+Stand: 12.11.2026
 
-Der Konfigurator ist eine eigenständige Seite. Auf www.sembla.de/produkt wird er per iframe eingebettet. Insgesamt sind vier Dinge zu tun.
+Der Konfigurator ist eine eigenständige Seite. Auf www.sembla.de/produkt wird er per iframe eingebettet. Offen sind drei Dinge: Einbettungscode einfügen (1), Projektformular anbinden (1) und den CORS-Kopf für die Schriften setzen (4). Das DNS (3) ist erledigt.
 
 ## 1. Einbettungscode einfügen
 
@@ -13,6 +13,8 @@ Den Block aus [`sembla-einbettung.html`](sembla-einbettung.html) an der gewünsc
   - Bitte in `formularOeffnen()` den Text aus `zusammenfassung` in ein verstecktes Feld des Formulars schreiben.
   - Vorläufig wird der vorhandene Knopf „Jetzt Projekt starten“ ausgelöst.
 - Er reicht Nutzungsereignisse an den Google Tag Manager weiter (`dataLayer`, Ereignis `sembla_konfigurator`).
+
+Am iframe stehen `data-cookieconsent="ignore"` (Cookiebot, siehe 2) und `allow="fullscreen"` (Knopf „Vollbild“ der Vorschau). Beide bitte nicht entfernen.
 
 Adresse im `src`: `https://konfigurator.sembla.de/?compact=1`. Sie gilt seit 03.11.2026; die alte Adresse unter p0lycare.github.io leitet dorthin weiter.
 

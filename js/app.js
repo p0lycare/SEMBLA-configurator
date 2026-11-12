@@ -279,6 +279,8 @@ function vollbild(an) {
   if (!an && document.fullscreenElement) document.exitFullscreen().catch(() => {});
   if (an) ereignis("vollbild");
 }
+// Eingebettet ohne allow="fullscreen" füllte die Ebene nur den (sehr hohen) iframe: dann kein Knopf.
+if (window.self !== window.top && !document.fullscreenEnabled) $("vollbild").hidden = true;
 $("vollbild").onclick = () => vollbild(!buehne.classList.contains("vollbild-an"));
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && buehne.classList.contains("vollbild-an")) vollbild(false); });
 document.addEventListener("fullscreenchange", () => { if (!document.fullscreenElement && buehne.classList.contains("vollbild-an")) vollbild(false); });
