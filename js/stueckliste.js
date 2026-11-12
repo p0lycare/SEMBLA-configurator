@@ -88,7 +88,7 @@ function untergrundTeile(r) {
   if (w.deckenanschlusspunkte.length)
     teile.push({ symbol: "schraube", name: "Befestigungssatz Deckenwinkel an der Rohdecke", menge: w.deckenanschlusspunkte.length, einheit: "Stk",
       detail: "Dübel bzw. Anker nach Deckenart, je Deckenwinkel-Set", material: "stahl" });
-  teile.push({ symbol: "trennstreifen", name: "Trennstreifen Mineralwolle, seitlicher Wandanschluss", menge: Math.round(2 * w.height_mm / 100) / 10, einheit: "lfm", ca: true,
+  teile.push({ symbol: "trennstreifen", name: "Trennstreifen Mineralwolle, seitlicher Wandanschluss", menge: Math.round(2 * r.kennzahlen.raumhoehe_mm / 100) / 10, einheit: "lfm", ca: true,
     detail: "an beiden Wandenden, beidseitig elastisch verfugt; entfällt am freien Wandende", material: "mineralwolle" });
   return teile;
 }

@@ -67,8 +67,8 @@ zustand.raumhoehe_mm = wandhoehe(zustand.raumhoehe_mm) + DECKENFUGE_MM;
 $("hoehe").min = WAND.min; $("hoehe").max = WAND.max; $("hoehe").step = LAGE;
 $("hoehe").value = zustand.raumhoehe_mm - DECKENFUGE_MM;
 $("laenge").min = GRENZEN.laengeMin; $("laenge").max = GRENZEN.laengeMax;
-$("laenge").oninput = (e) => { zustand.laenge_mm = +e.target.value; kollision = null; planen(); };
-$("hoehe").oninput = (e) => { zustand.raumhoehe_mm = +e.target.value + DECKENFUGE_MM; planen(); };
+$("laenge").oninput = (e) => { zustand.laenge_mm = +e.target.value; kollision = null; $("oeffnungHinweis").hidden = true; planen(); };
+$("hoehe").oninput = (e) => { zustand.raumhoehe_mm = +e.target.value + DECKENFUGE_MM; kollision = null; $("oeffnungHinweis").hidden = true; planen(); };
 const meter = (mm) => `${de(mm / 1000, Math.round(mm) % 10 ? 3 : 2)} Meter`;
 
 // ---------- Öffnungen ----------
@@ -85,7 +85,7 @@ let listenSchluessel = "";
 // Kollision (Feedback Felix 1.6): Die bewegte Öffnung passt nicht an die gewünschte Stelle und rastet
 // woandershin. {i, wunsch, gesetzt, grund, x0, x1, l0, l1} oder null; gezeigt in der Zeile, als
 // Hinweis unter der Vorschau und als roter Kasten in 2D und 3D, bis die nächste Eingabe passt.
-let kollision = null, bewegt = false;
+let kollision = null, bewegt = false, fokusNachEntfernen = false, letzteHinweise = null;
 /** Warum die Öffnung i nicht ab Raster `wunsch` sitzen kann; null, wenn sie nur im Steinverband einrastet. */
 function kollisionsGrund(r, i, wunsch) {
   const o = zustand.oeffnungen[i], b = oeffnungsMasse(o).b, N = r.w.length_mm / 125;
@@ -103,7 +103,7 @@ function kollisionsGrund(r, i, wunsch) {
 let offen = 0;
 function oeffnungenZeichnen(r) {
   const N = r.w.length_mm / 125;
-  const schluessel = zustand.oeffnungen.map((o) => o.art).join() + "|" + N;
+  const schluessel = zustand.oeffnungen.map((o) => o.art).join();
   const liste = $("oeffnungsliste");
   const titel = (i) => {
     const o = zustand.oeffnungen[i], gleiche = zustand.oeffnungen.filter((x) => x.art === o.art);
@@ -121,24 +121,25 @@ function oeffnungenZeichnen(r) {
       </div>`).join("");
     liste.querySelectorAll("[data-pos]").forEach((el) => (el.oninput = () => {
       const i = +el.dataset.pos;
-      zustand.oeffnungen[i].pos = +el.value; zustand.aktiv = i; bewegt = true; planen();
+      zustand.oeffnungen[i].pos = +el.value; zustand.aktiv = i; bewegt = true; $("oeffnungHinweis").hidden = true; planen();
     }));
     // Position als Zahl (Feedback Felix 1.5): Meter vom linken Wandende, auf 12,5 cm gerundet.
     liste.querySelectorAll("[data-ab]").forEach((el) => (el.onchange = () => {
       const i = +el.dataset.ab, wert = parseFloat(String(el.value).replace(",", "."));
       if (!Number.isFinite(wert)) return;
-      zustand.oeffnungen[i].pos = Math.max(0, Math.round(wert * 1000 / 125)); zustand.aktiv = i; bewegt = true;
+      zustand.oeffnungen[i].pos = Math.max(0, Math.round(wert * 1000 / 125)); zustand.aktiv = i; bewegt = true; $("oeffnungHinweis").hidden = true;
       ereignis("oeffnung_position", { art: zustand.oeffnungen[i].art });
       planen();
     }));
     liste.querySelectorAll("[data-mass]").forEach((el) => (el.onchange = () => {
       const i = +el.dataset.i;
-      zustand.oeffnungen[i][el.dataset.mass] = +el.value; zustand.aktiv = i; bewegt = true;
+      zustand.oeffnungen[i][el.dataset.mass] = +el.value; zustand.aktiv = i; bewegt = true; $("oeffnungHinweis").hidden = true;
       ereignis("oeffnung_mass", { art: zustand.oeffnungen[i].art, [el.dataset.mass]: +el.value });
       planen();
     }));
     liste.querySelectorAll("[data-weg]").forEach((el) => (el.onclick = () => {
-      zustand.oeffnungen.splice(+el.dataset.weg, 1); zustand.aktiv = -1; kollision = null; offen = zustand.oeffnungen.length - 1; planen();
+      zustand.oeffnungen.splice(+el.dataset.weg, 1); zustand.aktiv = -1; kollision = null; $("oeffnungHinweis").hidden = true;
+      fokusNachEntfernen = true; offen = zustand.oeffnungen.length - 1; planen();
     }));
     liste.querySelectorAll("[data-auf]").forEach((el) => (el.onclick = () => { offen = +el.dataset.auf; planen(); }));
   }
@@ -176,6 +177,10 @@ function oeffnungenZeichnen(r) {
     }
   });
   bewegt = false;
+  if (fokusNachEntfernen) {
+    fokusNachEntfernen = false;
+    (liste.querySelector(`[data-auf="${offen}"]`) || $("plusTuer")).focus();
+  }
   if (kollision && !zustand.oeffnungen[kollision.i]) kollision = null;
   r.kollision = kollision;
   for (const art of ["tuer", "fenster"])
@@ -183,6 +188,7 @@ function oeffnungenZeichnen(r) {
 }
 function hinzufuegen(art) {
   if (zustand.oeffnungen.filter((o) => o.art === art).length >= OEFFNUNGEN[art].max) return;
+  kollision = null; $("oeffnungHinweis").hidden = true;
   zustand.oeffnungen.push({ art, pos: null });
   zustand.aktiv = offen = zustand.oeffnungen.length - 1;
   ereignis("oeffnung", { art });
@@ -211,9 +217,12 @@ $("innen").innerHTML = A.innen.filter(FREI).map((f) => `<button type="button" da
 const ebenen = { steine: true, spann: true, verbinder: true, fassade: true, innen: true };
 const EBENEN_NAMEN = { steine: "Steine", spann: "Spannsystem", verbinder: "Verbinder", fassade: "Fassade", innen: "Innen" };
 function ebenenZeichnen() {
+  // Einmal bauen, danach nur aria-pressed umschalten: so bleibt der Tastaturfokus auf dem Knopf.
   $("ebenen").innerHTML = Object.keys(ebenen).map((k) => `<button type="button" data-wert="${k}" aria-pressed="${ebenen[k]}">${EBENEN_NAMEN[k]}</button>`).join("");
   $("ebenen").querySelectorAll("button").forEach((b) => (b.onclick = () => {
-    ebenen[b.dataset.wert] = !ebenen[b.dataset.wert]; ebenenZeichnen(); modell?.setze({ ebenen });
+    ebenen[b.dataset.wert] = !ebenen[b.dataset.wert];
+    b.setAttribute("aria-pressed", String(ebenen[b.dataset.wert]));
+    modell?.setze({ ebenen });
   }));
 }
 ebenenZeichnen();
@@ -350,9 +359,8 @@ function aktualisieren() {
   $("innenText").textContent = innen.kurz;
 
   oeffnungenZeichnen(r);
-  if (zustand.aktiv === -1) $("oeffnungHinweis").hidden = true;
 
-  $("masse").textContent = `${m(k.laenge_mm)} × ${m(k.wandhoehe_mm)}`;
+  $("masse").textContent = `${mRaster(k.laenge_mm)} × ${m(k.wandhoehe_mm)}`;
 
   $("kacheln").innerHTML = kachelnHtml(r, { kurz: true });
   // Der aufgeklappte Rechenweg bleibt beim Neuzeichnen offen.
@@ -374,7 +382,9 @@ function aktualisieren() {
   };
   if (linkHinweise.wahl === wahlKennung()) r.hinweise.unshift(...linkHinweise.texte);
   if (r.kollision) r.hinweise.unshift(`Öffnung kollidiert: ${r.kollision.grund}. Rot markiert ist die gewünschte Lage.`);
-  $("hinweise").innerHTML = hinweiseBuehne(r.hinweise);
+  // Nur bei Änderung schreiben: der Bereich ist aria-live und würde sonst bei jedem Reglerschritt neu angesagt.
+  const hinweisHtml = hinweiseBuehne(r.hinweise);
+  if (hinweisHtml !== letzteHinweise) { $("hinweise").innerHTML = hinweisHtml; letzteHinweise = hinweisHtml; }
 
   zeichnen2d();
   zeichnenSchnitt();
@@ -382,11 +392,23 @@ function aktualisieren() {
   modellAktualisieren(r, fassade, innen);
   rueckbauText(+$("rueckbau").value / 100);
 
-  const p = new URLSearchParams(location.search);
-  Object.entries(urlParameter(zustand, r)).forEach(([a, b]) => p.set(a, b));
-  p.delete("p");
-  history.replaceState(null, "", `?${p}`);
-  speicher.schreiben(urlParameter(zustand, r));
+  merken(urlParameter(zustand, r));
+}
+
+// URL und gespeicherter Stand: entprellt (beim Ziehen eines Reglers nicht bei jedem Schritt;
+// Safari wirft sonst ab etwa 100 replaceState-Aufrufen) und abgesichert.
+let merkTimer = 0;
+function merken(parameter) {
+  clearTimeout(merkTimer);
+  merkTimer = setTimeout(() => {
+    try {
+      const p = new URLSearchParams(location.search);
+      Object.entries(parameter).forEach(([a, b]) => p.set(a, b));
+      p.delete("p");
+      history.replaceState(null, "", `?${p}`);
+    } catch { /* URL bleibt beim letzten Stand */ }
+    try { speicher.schreiben(parameter); } catch { /* ohne Speicher weiter */ }
+  }, 300);
 }
 
 // Zurücksetzen: gespeicherten Stand löschen und ohne Konfigurationsparameter neu laden.

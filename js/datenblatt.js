@@ -5,7 +5,7 @@ import { berechne, zusammenfassung } from "./wand.js";
 import { zeichne } from "./ansicht2d.js";
 import { zeichneSchnitt } from "./schnitt2d.js";
 import { stueckliste } from "./stueckliste.js";
-import { m, zustandAusUrl, urlParameter, aufbauWahl, kachelnHtml, stuecklisteHtml, regelnHtml, hinweiseHtml, waermeHtml, RECHENSTAND, LIEFERUMFANG_TEXT, planungHtml } from "./inhalte.js";
+import { m, mRaster, zustandAusUrl, urlParameter, aufbauWahl, kachelnHtml, stuecklisteHtml, regelnHtml, hinweiseHtml, waermeHtml, RECHENSTAND, LIEFERUMFANG_TEXT, planungHtml } from "./inhalte.js";
 import { ereignis } from "./einbettung.js";
 
 const $ = (id) => document.getElementById(id);
@@ -24,15 +24,19 @@ const r = berechne({ ...zustand, fassade: roh, innen, waerme, verbinder });
 $("datum").textContent = new Date().toLocaleDateString("de-DE", { day: "numeric", month: "long", year: "numeric" });
 // Einheit in eigenem span: die Überschrift steht in Versalien, die Einheit bleibt „m“.
 const mTitel = (mm) => m(mm).replace(/ m$/, ' <span class="einheit">m</span>');
-$("titel").innerHTML = `Wand ${mTitel(r.kennzahlen.laenge_mm)} × ${mTitel(r.kennzahlen.wandhoehe_mm)}`;
+$("titel").innerHTML = `Wand ${mRaster(r.kennzahlen.laenge_mm).replace(/ m$/, ' <span class="einheit">m</span>')} × ${mTitel(r.kennzahlen.wandhoehe_mm)}`;
 $("untertitel").textContent = zusammenfassung({ ...zustand, fassade: r.fassade, innen }, r);
 zeichne($("zeichnung"), r);
+$("legendePunkt").hidden = !r.fa?.punkte?.length;
 zeichneSchnitt($("schnitt"), r, innen, A.materialien);
 $("kacheln").innerHTML = kachelnHtml(r);
 $("lieferumfang").textContent = LIEFERUMFANG_TEXT;
 if (zustand.ersetzt.length) r.hinweise.unshift("Dieser Link enthielt eine Variante, die es nicht mehr gibt. Sie wurde durch die Voreinstellung ersetzt.");
 if (zustand.stand && zustand.stand !== RECHENSTAND)
-  r.hinweise.unshift("Seit Ihrer Anfrage wurde die Rechnung des Konfigurators aktualisiert. Die Dämmstärken sind wie damals gewählt, U-Wert und Tauwasserschutz nach aktuellem Stand gerechnet.");
+  // Passen die damaligen Dämmstärken nicht mehr zu den Stufen der Fassade, legt aufbauWahl neu aus.
+  r.hinweise.unshift(`Seit Ihrer Anfrage wurde die Rechnung des Konfigurators aktualisiert. ${waerme.fest || !zustand.fest
+    ? "Die Dämmstärken sind wie damals gewählt, U-Wert und Tauwasserschutz nach aktuellem Stand gerechnet."
+    : "Die damaligen Dämmstärken gibt es für diese Fassade nicht mehr; sie sind nach aktuellem Stand neu ausgelegt."}`);
 else if (!zustand.stand && r.waerme?.daemmung_mm)
   r.hinweise.unshift("Dieser Link stammt aus einer früheren Version des Konfigurators. Die Dämmstärken sind nach aktuellem Stand neu ausgelegt.");
 $("hinweise").innerHTML = hinweiseHtml(r);
@@ -46,8 +50,8 @@ $("drucken").onclick = () => window.print();
 
 // Downloads für die Planung: BIM (IFC4), CAD (DXF) und Ausschreibungstext. Die Exporte werden erst
 // beim Klick geladen, damit das Datenblatt schnell erscheint.
-const dateiname = `SEMBLA-Wand_${(r.kennzahlen.laenge_mm / 1000).toFixed(2).replace(".", ",")}x${(r.kennzahlen.wandhoehe_mm / 1000).toFixed(2).replace(".", ",")}m`;
-const info = { link: location.href, titel: `SEMBLA-Wand ${m(r.kennzahlen.laenge_mm)} × ${m(r.kennzahlen.wandhoehe_mm)}`, windlast: verbinder?.last?.text };
+const dateiname = `SEMBLA-Wand_${mRaster(r.kennzahlen.laenge_mm).replace(/ m$/, "")}x${(r.kennzahlen.wandhoehe_mm / 1000).toFixed(2).replace(".", ",")}m`;
+const info = { link: location.href, titel: `SEMBLA-Wand ${mRaster(r.kennzahlen.laenge_mm)} × ${m(r.kennzahlen.wandhoehe_mm)}`, windlast: verbinder?.last?.text };
 function herunterladen(inhalt, name, typ) {
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([inhalt], { type: typ }));
@@ -63,6 +67,7 @@ const EXPORTE = {
 };
 document.querySelectorAll("[data-export]").forEach((b) => (b.onclick = async () => {
   b.disabled = true;
-  try { await EXPORTE[b.dataset.export](); ereignis("export", { art: b.dataset.export }); }
+  try { await EXPORTE[b.dataset.export](); ereignis("export", { art: b.dataset.export }); $("exportFehler").hidden = true; }
+  catch { $("exportFehler").hidden = false; }
   finally { b.disabled = false; }
 }));

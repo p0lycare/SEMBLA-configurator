@@ -25,7 +25,7 @@ export function wandAlsDxf(r, fassade, innen, info = {}) {
   };
   const schrift = (layer, x, y, h, t) => ent.push("0", "TEXT", "8", layer, "10", z(x), "20", z(y), "30", "0", "40", z(h), "1", ascii(t));
 
-  // Ansicht von innen: jeder Stein als Rechteck, Öffnungen, Spannachsen
+  // Ansicht (wie die Außenansicht, x nach rechts): jeder Stein als Rechteck, Öffnungen, Spannachsen
   for (const lage of w.courses) for (const s of lage.stones)
     rechteck(lage.ausgleich ? "AUSGLEICH" : s.type === "i2" ? "STEINE_I2" : "STEINE_I3", s.x0, lage.unterkante_mm, s.x1, lage.oberkante_mm);
   for (const op of w.openings) {

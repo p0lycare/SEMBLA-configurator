@@ -3,7 +3,7 @@
 
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { berechne, oeffnungenAufloesen, oeffnungsMasse, schraubenlaenge, schichtLagen, DECKENFUGE_MM, AUSGLEICH_MIN_MM } from "../js/wand.js";
+import { berechne, oeffnungenAufloesen, oeffnungsMasse, schraubenlaenge, schichtLagen, DECKENFUGE_MM, AUSGLEICH_MIN_MM, zusammenfassung } from "../js/wand.js";
 import { GRID, FORBIDDEN_N } from "../js/sembla-core.js";
 import { stueckliste, alsCsv } from "../js/stueckliste.js";
 import { auslegen, uWert, mitDaemmung } from "../js/waerme.js";
@@ -475,6 +475,15 @@ test("Anschlüsse (Robert, B20): Text für Kunden und Datenblatt, bauseitige Ans
   const bau = g.find((x) => x.id === "untergrund").teile;
   assert.equal(bau.find((t) => /Rohdecke/.test(t.name)).menge, r.w.deckenanschlusspunkte.length);
   assert.ok(Math.abs(bau.find((t) => t.symbol === "trennstreifen").menge - 2 * r.w.height_mm / 1000) < 0.051);
+});
+
+test("Review 12.11.: Längen im Raster mit drei Stellen, LV-Abrechnung, Wandaufbau-Export", () => {
+  const r = berechne({ laenge_mm: 8625, raumhoehe_mm: 2820, oeffnungen: [F], fassade: fass("schindel"), innen: inn("trockenbau_putz"), waerme: { kennwerte: A.waerme, ziel_U: 0.2 } });
+  assert.ok(/^Wand 8,625 × 2,80 m/.test(zusammenfassung({ fassade: r.fassade, innen: inn("trockenbau_putz") }, r)));
+  assert.ok(!/über 2,5 m²/.test(wandAlsLv(r, r.fassade, inn("trockenbau_putz"))));
+  const wa = wandaufbau(A, { fassade: "schindel", innen: "trockenbau_putz" });
+  assert.equal(typeof wa.glaser_ok, "boolean");
+  assert.equal(typeof wa.feuchteschutz_ok, "boolean");
 });
 
 test("Lieferumfang (B23): Polycare liefert Steine, Spannsystem, Anschlüsse und Verbinder, der Rest ist bauseits", () => {

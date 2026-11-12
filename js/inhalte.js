@@ -126,7 +126,7 @@ export function kachelnHtml(r, { kurz = false } = {}) {
     ]],
     ["geometrie", "Geometrie", [
       ["flaeche", "Wandfläche", de(k.flaeche_m2, 1), "m²", r.w.openings.length ? "ohne Öffnungen" : ""],
-      ["dicke", "Wanddicke", Math.round(k.dicke_gesamt_mm), "mm", "gesamt"],
+      ["dicke", "Wanddicke", Number.isInteger(k.dicke_gesamt_mm) ? k.dicke_gesamt_mm : de(k.dicke_gesamt_mm, 1), "mm", "gesamt"],   // wie im Schnitt, z. B. 437,5
       ["lagen", "Lagen", k.lagen, "", k.ausgleich_mm ? `oben ${k.ausgleich_mm} mm Ausgleich` : "à 20 cm"],
     ]],
     ["bauphysik", "Bauphysik & Gewicht", [

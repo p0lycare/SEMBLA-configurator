@@ -112,7 +112,7 @@ function position(t, a, seite, flaeche, teile) {
             : t.material === "gipsfaser" ? "Fugen gespachtelt, Oberfläche Q[2/3] nach DIN 18340."
             : "Oberfläche nach Herstellerangabe [gespachtelt / gestrichen].") };
       return { kurz: `Bekleidung ${p}`, menge: flaeche, einheit: "m²",
-        lang: `${n}${stueck}, nach Verlegeanleitung des Herstellers, Farbe und Oberfläche nach Bemusterung. Abrechnung nach Fläche, Öffnungen über 2,5 m² abgezogen.` };
+        lang: `${n}${stueck}, nach Verlegeanleitung des Herstellers, Farbe und Oberfläche nach Bemusterung. Abrechnung nach Fläche, Öffnungen abgezogen.` };
     }
     default:
       return { kurz: p, menge: t.menge, einheit: t.einheit, lang: `${n}${t.detail ? `, ${t.detail}` : ""}.` };

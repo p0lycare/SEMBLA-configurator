@@ -19,6 +19,8 @@ function bemassung(x0, x1, y, text, fs) {
  * (Raumseite: gespiegelt, mit den Verbindern der Innenseite). Beschriftungen werden nicht gespiegelt.
  * minHoehe (px): Die Zeichnung wird nie flacher; breite Wände lassen sich dann seitlich scrollen.
  */
+let zeichnungNr = 0;
+
 export function zeichne(el, r, { seite = "aussen", minHoehe = 0 } = {}) {
   const { w, kennzahlen: k } = r;
   const innen = seite === "innen";
@@ -30,13 +32,14 @@ export function zeichne(el, r, { seite = "aussen", minHoehe = 0 } = {}) {
   // Rand so breit, dass die Kopfzeile auch bei kurzen Wänden ganz zu sehen ist (Monospace ≈ 0,6 × Schrift je Zeichen).
   const rand = Math.max(260, Math.round(fs * 2.9), Math.round((kopf.length * 0.6 * fs - L) / 2 + 40));
   const teile = [];
+  const sid = `schraffur-${++zeichnungNr}`;   // eindeutig, auch wenn mehrere Zeichnungen im DOM stehen
 
-  teile.push(`<defs><pattern id="schraffur" width="40" height="40" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">`
+  teile.push(`<defs><pattern id="${sid}" width="40" height="40" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">`
     + `<line x1="0" y1="0" x2="0" y2="40" stroke="#1E1E1E" stroke-opacity=".18" stroke-width="10"/></pattern></defs>`);
 
   // Decke und Deckenfuge
   teile.push(`<rect x="-120" y="${Y(D) - 60}" width="${L + 240}" height="60" fill="#1E1E1E"/>`);
-  teile.push(`<rect x="0" y="${Y(D)}" width="${L}" height="${D - H}" fill="url(#schraffur)"/>`);
+  teile.push(`<rect x="0" y="${Y(D)}" width="${L}" height="${D - H}" fill="url(#${sid})"/>`);
 
   // Steine
   for (const c of w.courses) {

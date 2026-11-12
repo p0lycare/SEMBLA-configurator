@@ -303,7 +303,8 @@ export function berechne(cfg) {
 /** Kurztext für Formular und Tracking. */
 export function zusammenfassung(cfg, r) {
   const k = r.kennzahlen;
-  const m = (mm) => (mm / 1000).toFixed(2).replace(".", ",");
+  // Längen im 12,5-cm-Raster mit drei Stellen (8,625), sonst zwei.
+  const m = (mm) => (mm / 1000).toFixed(Math.round(mm) % 10 ? 3 : 2).replace(".", ",");
   const teile = [`Wand ${m(k.laenge_mm)} × ${m(k.wandhoehe_mm)} m`];
   const tueren = r.oeffnungen.filter((o) => o && o.art === "tuer").length;
   const fenster = r.oeffnungen.filter((o) => o && o.art === "fenster").length;

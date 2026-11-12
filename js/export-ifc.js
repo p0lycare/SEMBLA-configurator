@@ -74,7 +74,7 @@ export function wandAlsIfc(r, fassade, innen, info = {}) {
   };
   const achse = e(`IFCSHAPEREPRESENTATION(${achsKontext},'Axis','Curve2D',(${e(`IFCPOLYLINE((${e("IFCCARTESIANPOINT((0.,0.))")},${e(`IFCCARTESIANPOINT((${zahl(L)},0.))`)}))`)}))`);
   const koerper = e(`IFCSHAPEREPRESENTATION(${koerperKontext},'Body','SweptSolid',(${quader(0, 0, L, T, 0, H)}))`);
-  const wand = e(`IFCWALL('${guid()}',$,${text(`SEMBLA-Wand ${(L / 1000).toFixed(2).replace(".", ",")} × ${(k.wandhoehe_mm / 1000).toFixed(2).replace(".", ",")} m`)},${text(`${fassade.name} · innen ${innen.name}`)},$,${lageWand},${e(`IFCPRODUCTDEFINITIONSHAPE($,$,(${achse},${koerper}))`)},$,.STANDARD.)`);
+  const wand = e(`IFCWALL('${guid()}',$,${text(`SEMBLA-Wand ${(L / 1000).toFixed(Math.round(L) % 10 ? 3 : 2).replace(".", ",")} × ${(k.wandhoehe_mm / 1000).toFixed(2).replace(".", ",")} m`)},${text(`${fassade.name} · innen ${innen.name}`)},$,${lageWand},${e(`IFCPRODUCTDEFINITIONSHAPE($,$,(${achse},${koerper}))`)},$,.STANDARD.)`);
   e(`IFCRELCONTAINEDINSPATIALSTRUCTURE('${guid()}',$,$,$,(${wand}),${geschoss})`);
 
   // Schichtaufbau

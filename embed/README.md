@@ -84,6 +84,7 @@ Diese Ereignisnamen gibt es:
 | `innen_gewaehlt` | Innenseite gewählt |
 | `oeffnung` | Tür oder Fenster hinzugefügt |
 | `oeffnung_position` | Position einer Öffnung als Zahl eingegeben |
+| `oeffnung_mass` | Breite, Höhe oder Brüstung einer Öffnung geändert |
 | `info` | Reiter geöffnet (So funktioniert's, Stückliste, Wärmeschutz) |
 | `ansicht` | Vorschau gewechselt, `daten.ansicht`: `3d`, `aussen` oder `innen` |
 | `vollbild` | Vorschau im Vollbild geöffnet |
@@ -91,6 +92,7 @@ Diese Ereignisnamen gibt es:
 | `rueckbau_angesehen` | Rückbau-Regler bis zum Ende geschoben |
 | `cta` | Knopf gedrückt, `daten.anlass`: `termin` oder `fassadensystem` |
 | `datenblatt_angefordert` | Datenblatt-Anfrage erfolgreich abgeschickt |
+| `zuruecksetzen` | „Zurücksetzen“ gedrückt |
 
 Das Attribut `allow="fullscreen"` am iframe nicht entfernen: Ohne es füllt der Knopf „Vollbild“ nur den iframe statt des Bildschirms.
 
