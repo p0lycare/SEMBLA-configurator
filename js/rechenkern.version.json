@@ -3,9 +3,9 @@
   "dateien": {
     "js/sembla-core.js": {
       "pfad": "docs/shared/sembla-core.js",
-      "commit": "2f88b6be647f0ffa7c8fee78bdfd9f9b980a31ad",
-      "sha256": "05e18ea81025bd77c363b662d121f2dd270294da39b37be5f810e19fee63d218",
-      "uebernommen": "2026-11-04"
+      "commit": "4315d194511827d51cf70b0274ac466e216262c5",
+      "sha256": "c900b3965cc626ff019d011cc009d55e48d7e1dce1a24913d38976721d5b54cd",
+      "uebernommen": "2026-11-14"
     },
     "js/sembla-aufbau.js": {
       "pfad": "docs/shared/sembla-aufbau.js",
