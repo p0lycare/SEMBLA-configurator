@@ -243,7 +243,7 @@ Bei manchen Türpositionen meldet `buildWall` einen Versatzkonflikt in der Lage 
   - Holz-UK: KVH-Tiefe gleich Gefachdämmung.
   - Alu-UK: Mineralwolle; Halter sind 40 mm länger als die Dämmung.
 - **Annahmen, zu ersetzen durch Messwerte:**
-  - Stein: R = 0,10 m²K/W (Geopolymerbeton λ ≈ 1,25 W/(m·K), Kammern vernachlässigt).
+  - Stein: R = 0,12 m²K/W aus 3D-Simulation (Beton λ 2,0, Luftkammern); Messung von λ steht aus. Frühere Annahme: R = 0,10 (λ ≈ 1,25, Kammern vernachlässigt).
   - Alu-Halter mit Thermostopp: χ = 0,015 W/K, ein Halter je FA-Verbinder.
   - λ-Werte: Holzfaser flexibel 0,038, Holzfaser-Unterdeckplatte 0,042, Mineralwolle 0,035, KVH 0,13, Lehmbauplatte 0,35, Gipsfaser 0,32.
 - **Befund:** Bei Alu-UK bestimmen die Halter den U-Wert. Ein Halter je FA-Verbinder ergibt 2,7 bis 6,7 Halter je m², und mit Öffnungen werden GEG und BEG dann nur mit sehr dicker Dämmung oder gar nicht erreicht. Eine Alu-UK braucht ein eigenes, weiteres Halterraster.
@@ -266,7 +266,7 @@ Bei manchen Türpositionen meldet `buildWall` einen Versatzkonflikt in der Lage 
 
 - **Wärmeschutz-Ziel:** fest auf U ≤ 0,20, keine Auswahl mehr in der Übersicht; alte Links mit `w=` gelten weiter. (Die Gegenüberstellung GEG/BEG/EH40 im Reiter „Wärmeschutz“ ist seit 06.11.2026 entfallen, Kap. 19.)
 - **Bauphysikalische Grundwerte:**
-  - Stein: λB = 0,74 W/(m·K) (DIN 4108-4, Betonsteine), R = 0,17 m²K/W.
+  - Stein: R = 0,12 m²K/W (seit 17.11.2026; 3D-Simulation des Steins i3 mit Luftkammern, Beton ρ 2400, λ 2,0; Bericht im Repo SEMBLA-WUFI, `docs/sembla-stein-r.md`). Vorher λB = 0,74 nach DIN 4108-4, R = 0,17.
   - Dampfbremse: sd = 2 m. Bei R außen ≈ 1,33 × R innen ist die Konstruktion funktionsfähig; wir planen mit 1,5 als Reserve.
   - Die Schraubdurchdringungen der Bahn gelten nach DIN 4108-7, 6.1.2 als ausreichend luftdicht.
 - **DIN 4108-3:2018 gegen den Normtext geprüft:**
