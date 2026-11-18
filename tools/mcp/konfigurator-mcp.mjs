@@ -12,9 +12,9 @@
 import { readFileSync } from "node:fs";
 import { createInterface } from "node:readline";
 import { zustandAusUrl, aufbauWahl, datenblattParameter, RECHENSTAND } from "../../js/inhalte.js";
-import { berechne, GRENZEN, DECKENFUGE_MM, OEFFNUNGEN, oeffnungsMasse } from "../../js/wand.js";
+import { berechne, GRENZEN, DECKENFUGE_MM, OEFFNUNGEN } from "../../js/wand.js";
 import { stueckliste } from "../../js/stueckliste.js";
-import { wandaufbau, wandaufbauAusLink, FORMAT, VERSION } from "../../js/export-hygro.js";
+import { wandaufbauAusLink, FORMAT, VERSION } from "../../js/export-hygro.js";
 
 const A = JSON.parse(readFileSync(new URL("../../data/aufbauten.json", import.meta.url), "utf8"));
 const BASIS = (process.env.SEMBLA_BASIS_URL || "https://konfigurator.sembla.de/").replace(/\/?$/, "/");
