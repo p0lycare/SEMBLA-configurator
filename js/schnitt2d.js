@@ -117,7 +117,7 @@ export function zeichneSchnitt(el, r, innen, materialien = {}) {
 
   const defs = `<defs><pattern id="luft" width="24" height="24" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">`
     + `<rect width="24" height="24" fill="#FDFDFD"/><line x1="0" y1="0" x2="0" y2="24" stroke="#A7A7A6" stroke-width="3"/></pattern></defs>`;
-  const links = x0 - 90 - fs * 1.6, oben = Math.min(kopfY - fs, -r0 - 10), rechts = xk + r0 + 20;
+  const links = xm - 30 - fs * 1.15 - 12, oben = Math.min(kopfY - fs, -r0 - 10), rechts = xk + r0 + 20;
   const unten = Math.max(gesamt + fs * 2.2, textEnde);
   const vb = `${links} ${oben} ${rechts - links} ${unten - oben}`;
   el.innerHTML = `<svg viewBox="${vb}" role="img" aria-label="Wandschnitt, Aufbau ${de(gesamt)} mm, ${eintraege.length} Schichten von innen nach außen">${defs}${teile.join("")}</svg>`
