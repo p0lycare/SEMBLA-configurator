@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "sembla-konfigurator": {
+      "command": "node",
+      "args": ["tools/mcp/konfigurator-mcp.mjs"]
+    }
+  }
+}
