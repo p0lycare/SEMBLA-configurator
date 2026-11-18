@@ -83,8 +83,9 @@ export function wandaufbau(A, auswahl, { link = null } = {}) {
     bezeichnung: { fassade: roh.name, innen: innen.name },
     aussen: aussenArt(fassade, aussen),
     U: Math.round(r.U * 1000) / 1000,
-    glaser_ok: r.feuchte ? !!r.feuchte.glaser?.ok : null,
-    feuchteschutz_ok: r.feuchte ? !!r.feuchte.ok : null,   // Glaser, Temperatur an der Bahn, luftdichte Ebene
+    // Format v1, nicht stillschweigend ändern: glaser_ok ist das Gesamtergebnis des Feuchteschutzes
+    // (Glaser, Temperatur an der Bahn, luftdichte Ebene), wie seit Einführung des Formats.
+    glaser_ok: r.feuchte ? !!r.feuchte.ok : null,
     schnitt: "Gefachschnitt: Ständer, Halter und Latten neben einem Gefachstoff entfallen; Lattenebene ohne Gefachstoff als ruhende Luft; Aufbau endet an der Belüftungsebene.",
     entfallen,
     schichten: [...innenLagen, stein, ...aussenLagen],

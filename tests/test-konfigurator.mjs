@@ -483,7 +483,7 @@ test("Review 12.11.: Längen im Raster mit drei Stellen, LV-Abrechnung, Wandaufb
   assert.ok(!/über 2,5 m²/.test(wandAlsLv(r, r.fassade, inn("trockenbau_putz"))));
   const wa = wandaufbau(A, { fassade: "schindel", innen: "trockenbau_putz" });
   assert.equal(typeof wa.glaser_ok, "boolean");
-  assert.equal(typeof wa.feuchteschutz_ok, "boolean");
+  assert.ok(!("feuchteschutz_ok" in wa));   // Format v1 unverändert
 });
 
 test("Lieferumfang (B23): Polycare liefert Steine, Spannsystem, Anschlüsse und Verbinder, der Rest ist bauseits", () => {
