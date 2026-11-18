@@ -266,7 +266,7 @@ Bei manchen Türpositionen meldet `buildWall` einen Versatzkonflikt in der Lage 
 
 - **Wärmeschutz-Ziel:** fest auf U ≤ 0,20, keine Auswahl mehr in der Übersicht; alte Links mit `w=` gelten weiter. (Die Gegenüberstellung GEG/BEG/EH40 im Reiter „Wärmeschutz“ ist seit 06.11.2026 entfallen, Kap. 19.)
 - **Bauphysikalische Grundwerte:**
-  - Stein: R = 0,12 m²K/W (seit 17.11.2026; 3D-Simulation des Steins i3 mit Luftkammern, Beton ρ 2400, λ 2,0; Bericht im Repo SEMBLA-WUFI, `docs/sembla-stein-r.md`). Vorher λB = 0,74 nach DIN 4108-4, R = 0,17.
+  - Stein: R = 0,12 m²K/W (seit 17.11.2026; 3D-Simulation des Steins i3 mit Luftkammern, Beton ρ 2400, λ 2,0; Bericht im Repo SEMBLA-hygro, `docs/sembla-stein-r.md`). Vorher λB = 0,74 nach DIN 4108-4, R = 0,17.
   - Dampfbremse: sd = 2 m. Bei R außen ≈ 1,33 × R innen ist die Konstruktion funktionsfähig; wir planen mit 1,5 als Reserve.
   - Die Schraubdurchdringungen der Bahn gelten nach DIN 4108-7, 6.1.2 als ausreichend luftdicht.
 - **DIN 4108-3:2018 gegen den Normtext geprüft:**
