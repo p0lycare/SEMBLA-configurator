@@ -51,7 +51,7 @@ Am Ende steht ein klarer Call to Action: „Projekt starten“ bzw. „Wand vom 
 
 Die Schriften sind lizenzpflichtig und dürfen nicht ohne Weiteres ins öffentliche Repo. **Offen:** Dürfen wir sie aus dem Webfont-Paket von sembla.de nutzen? Sonst nehmen wir einen Systemschrift-Fallback.
 
-Botschaften von der Website, die der Konfigurator aufgreifen kann: 12,5-cm-Raster und Baurichtmaß, „Bauen ohne Mörtel“, Rw 47 dB, EI 60 (Website-Text nennt auch F60), 167 kg/m², 12,5 cm Wandstärke, Trennwände bis 5 m Höhe, bis Gebäudeklasse 4, Geopolymerbeton mit bis zu 70 % weniger CO₂, Fassade „Ökologisch: Holz & Holzfaser“ oder „Klassisch: Metall & Steinwolle“.
+Botschaften von der Website, die der Konfigurator aufgreifen kann: 12,5-cm-Raster und Baurichtmaß, „Bauen ohne Mörtel“, Rw 47 dB, EI 60 (Website-Text nennt auch F60), 167 kg/m², 12,5 cm Wandstärke, Trennwände bis 5 m Höhe, bis Gebäudeklasse 4, Geopolymerbeton mit bis zu 70 % weniger CO₂ (überholt: der Stein wird künftig aus CEM III/A gefertigt, CO₂-Aussage prüfen), Fassade „Ökologisch: Holz & Holzfaser“ oder „Klassisch: Metall & Steinwolle“.
 
 ## 4 · Fachliche Regeln (Quelle: Planning-Suite, Handbuch Kap. 2 und 16)
 
@@ -162,7 +162,7 @@ Stand der Desk-Recherche vom 02.11.2026. Herstellerangaben vor der Veröffentlic
 
 **Grundprinzip:** Wir zeigen die vorgehängte hinterlüftete Fassade (VHF), weil sie sortenrein trennbar und mechanisch lösbar ist. Geklebte Systeme kommen nicht in Frage. Genietete Platten sind nur eingeschränkt rückbaubar.
 
-**Kritischer Punkt für alle Systeme:** Für Geopolymerbeton gibt es keine Dübelzulassung [A]. Bei SEMBLA übernehmen die **FA-Verbinder in den Nuten** diese Rolle. Jede UK muss deshalb auf die Verbinderpunkte (125er-Nutraster, Steinmitte) gesetzt werden. Das ist ein starkes Verkaufsargument: Es wird nicht gebohrt, und die Wand bleibt unbeschädigt.
+**Kritischer Punkt für alle Systeme:** Der Stein wird künftig aus Normalbeton mit CEM III/A gefertigt (DIN EN 771-3, CE-Kennzeichnung, Stand 18.11.2026). Dübel mit ETA für Hohlblocksteine aus Beton wären damit grundsätzlich möglich, gegebenenfalls mit Baustellenversuchen [A]. SEMBLA bleibt beim Prinzip ohne Bohren: Bei SEMBLA übernehmen die **FA-Verbinder in den Nuten** diese Rolle. Jede UK muss deshalb auf die Verbinderpunkte (125er-Nutraster, Steinmitte) gesetzt werden. Das ist ein starkes Verkaufsargument: Es wird nicht gebohrt, und die Wand bleibt unbeschädigt.
 
 ### Unterkonstruktion
 
@@ -426,4 +426,5 @@ Recherche in Herstellerdatenblättern, Markt Deutschland. Herstellernamen stehen
 - **Layout nach Review (Andreas, 12.11.2026):** Unter dem Bild steht eine Kennwert-Zeile (Steine, Wanddicke, U-Wert, Gewicht), damit die Ergebnisse auch auf dem Desktop ohne Scrollen sichtbar sind; die Kacheln bleiben darunter. Auf dem Handy erscheint oben eine mitlaufende Mini-Vorschau (2D-Wand und Kennwerte), solange die Eingaben im Bild sind und die Vorschau nicht; ein Tipp darauf springt zur Vorschau. Eingebettet (kompakt) entfällt sie, weil der iframe die volle Höhe hat. Der Rückbau-Regler bleibt bei der 3D-Vorschau, die er bewegt.
 - **MCP-Server (18.11.2026):** `tools/mcp/konfigurator-mcp.mjs` rechnet Konfigurationen mit denselben Modulen wie die Seite. `varianten` listet freigegebene Fassaden, Innenseiten und Ziele; `konfiguration_erstellen` liefert Kennwerte, Stückliste kurz, Links zu Konfigurator und Datenblatt mit den ausgelegten Dämmstärken `dd`/`da` sowie den Wandaufbau `sembla-wandaufbau` v1; `konfiguration_auslegen` die dünnste zulässige Dämmstufe je Ziel; `wandaufbau` den Export zu einem Link. Das Format v1 bleibt unverändert; Änderungen nur mit neuer Version.
 - **Datenblatt-Anfrage:** zwei getrennte Häkchen, Pflicht für das Datenblatt und freiwillig für den Kontaktwunsch; dieser steht in der Zusammenfassung an HubSpot (Details in `docs/HUBSPOT.md`).
+- **Steinmaterial CEM III/A (Andreas, 18.11.2026):** Der SEMBLA-Stein wird künftig aus Normalbeton mit CEM III/A gefertigt statt aus Geopolymerbeton. Er fällt damit unter DIN EN 771-3 und bekommt die CE-Kennzeichnung. Die Kennwerte (λ = 2,0 W/(m·K), R = 0,12 m²K/W) bleiben, die Quellenangabe im Wärmeschutz nennt jetzt das neue Material. Sobald die Leistungserklärung vorliegt, ihre Werte für λ, Rohdichte und Druckfestigkeit übernehmen. Die CE-Kennzeichnung gilt nur für den Stein, nicht für die Bauart und nicht für die Verbinder.
 - **Gespeicherte Konfiguration:** Die letzte Konfiguration bleibt im Browser (`localStorage`); ein Link mit Parametern hat Vorrang, „Zurücksetzen“ stellt die Voreinstellung her.

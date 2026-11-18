@@ -792,7 +792,7 @@
     "Rse_hinterlueftet": 0.13,
     "stein": {
       "R": 0.12,
-      "quelle": "Stein: R = 0,12 m²K/W als Rechenwert aus einer 3D-Simulation des Steins mit Luftkammern nach DIN EN ISO 10211 (Beton bzw. Geopolymerbeton ρ = 2400 kg/m³, λ = 2,0 W/(m·K) nach DIN EN ISO 10456); noch nicht durch Messung bestätigt",
+      "quelle": "Stein: R = 0,12 m²K/W als Rechenwert aus einer 3D-Simulation des Steins mit Luftkammern nach DIN EN ISO 10211 (Mauerstein aus Normalbeton mit CEM III/A nach DIN EN 771-3, ρ = 2400 kg/m³, λ = 2,0 W/(m·K) nach DIN 4108-4 bzw. DIN EN ISO 10456); noch nicht durch Messung bestätigt",
       "mu": 0,
       "quelle_mu": "Der Stein wird im Tauwasserschutz nicht als Dampfbremse angesetzt (trocken gefügt, fugenreich)"
     },
