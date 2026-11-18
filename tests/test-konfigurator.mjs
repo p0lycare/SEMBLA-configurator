@@ -1,6 +1,7 @@
 // Regressionstests des Konfigurators. Laufen lokal (`npm test`) und in der Action, die den
 // Rechenkern der Planungs-Suite übernimmt: nur wenn sie grün sind, geht ein neuer Kern live.
 
+import { spawnSync } from "node:child_process";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { berechne, oeffnungenAufloesen, oeffnungsMasse, schraubenlaenge, schichtLagen, DECKENFUGE_MM, AUSGLEICH_MIN_MM, zusammenfassung } from "../js/wand.js";
@@ -484,6 +485,25 @@ test("Review 12.11.: Längen im Raster mit drei Stellen, LV-Abrechnung, Wandaufb
   const wa = wandaufbau(A, { fassade: "schindel", innen: "trockenbau_putz" });
   assert.equal(typeof wa.glaser_ok, "boolean");
   assert.ok(!("feuchteschutz_ok" in wa));   // Format v1 unverändert
+});
+
+test("MCP-Server: Werkzeuge, Link mit dd/da, Wandaufbau v1, Fehler als isError", () => {
+  const zeilen = [
+    { jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-06-18" } },
+    { jsonrpc: "2.0", id: 2, method: "tools/list" },
+    { jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "konfiguration_erstellen", arguments: { fassade: "schindel", innen: "trockenbau_putz" } } },
+    { jsonrpc: "2.0", id: 4, method: "tools/call", params: { name: "konfiguration_auslegen", arguments: { fassade: "schindel", innen: "trockenbau_putz", ziele: ["beg"] } } },
+    { jsonrpc: "2.0", id: 5, method: "tools/call", params: { name: "konfiguration_erstellen", arguments: { fassade: "schindel", innen: "trockenbau_putz", dd: 130 } } },
+  ].map((m) => JSON.stringify(m)).join("\n") + "\n";
+  const aus = spawnSync(process.execPath, [new URL("../tools/mcp/konfigurator-mcp.mjs", import.meta.url).pathname], { input: zeilen, encoding: "utf8" });
+  const antworten = Object.fromEntries(aus.stdout.trim().split("\n").map((l) => JSON.parse(l)).map((z) => [z.id, z.result]));
+  assert.deepEqual(antworten[2].tools.map((t) => t.name), ["varianten", "konfiguration_erstellen", "konfiguration_auslegen", "wandaufbau"]);
+  const e = antworten[3].structuredContent;
+  assert.ok(/[?&]dd=\d+/.test(e.links.konfigurator) && /[?&]da=\d+/.test(e.links.konfigurator));
+  assert.equal(e.wandaufbau.format, "sembla-wandaufbau"); assert.equal(e.wandaufbau.version, 1);
+  assert.equal(e.kennwerte.daemmung_mm, e.wandaufbau.konfiguration.daemmung_mm);
+  assert.equal(antworten[4].structuredContent.auslegungen[0].daemmung_mm, e.kennwerte.daemmung_mm);
+  assert.ok(antworten[5].isError && /Stufen/.test(antworten[5].content[0].text));
 });
 
 test("Lieferumfang (B23): Polycare liefert Steine, Spannsystem, Anschlüsse und Verbinder, der Rest ist bauseits", () => {
