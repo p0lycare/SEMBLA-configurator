@@ -92,9 +92,23 @@ export function wandaufbau(A, auswahl, { link = null } = {}) {
   };
 }
 
-/** Wandaufbau aus einem Konfigurator- oder Datenblatt-Link (oder nur dem Teil nach „?“). */
+/**
+ * Wandaufbau aus einem Konfigurator- oder Datenblatt-Link (oder nur dem Teil nach „?“).
+ * Ohne dd im Link wird ausgelegt; der zurückgegebene Link trägt dann v/dd/da wie die Links des
+ * Konfigurators, damit derselbe Aufbau immer denselben Link (und in der Hygro dieselbe Prüfsumme) hat.
+ */
 export function wandaufbauAusLink(A, link) {
-  const query = link.includes("?") ? link.slice(link.indexOf("?") + 1) : link;
-  const z = zustandAusUrl(new URLSearchParams(query));
-  return wandaufbau(A, { fassade: z.fassade, innen: z.innen, ziel: z.ziel, d: z.fest?.d, da: z.fest?.da }, { link });
+  const i = link.indexOf("?");
+  const query = i >= 0 ? link.slice(i + 1) : link;
+  const p = new URLSearchParams(query);
+  const z = zustandAusUrl(p);
+  const w = wandaufbau(A, { fassade: z.fassade, innen: z.innen, ziel: z.ziel, d: z.fest?.d, da: z.fest?.da }, { link });
+  if (!z.fest && w.konfiguration.daemmung_mm) {
+    for (const k of ["v", "dd", "da"]) p.delete(k);
+    p.set("v", RECHENSTAND);
+    p.set("dd", w.konfiguration.daemmung_mm);
+    if (w.konfiguration.daemmung_aussen_mm != null) p.set("da", w.konfiguration.daemmung_aussen_mm);
+    w.konfiguration.link = (i >= 0 ? link.slice(0, i + 1) : "") + p;
+  }
+  return w;
 }

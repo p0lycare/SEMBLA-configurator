@@ -575,6 +575,11 @@ test("Wandaufbau-Export: Gefachschnitt von innen nach außen, Ende an der Belüf
   assert.equal(v1.aussen, "hinterlueftet");
   assert.equal(v1.schichten[4].rolle, "gefach");
   assert.equal(v1.schichten[2].rolle, "installationsebene");
+  // Link ohne dd: ausgelegt, und der Link trägt v/dd/da wie die Links des Konfigurators.
+  const basis = "https://konfigurator.sembla.de/?l=6000&h=2820&o=keine&f=schindel&i=trockenbau_putz&w=beg";
+  assert.equal(wandaufbauAusLink(A, basis).konfiguration.link, `${basis}&v=6&dd=120&da=60`);
+  assert.equal(wandaufbauAusLink(A, "f=holzleiste_einlagig&i=sicht&w=beg&v=6").konfiguration.link, "f=holzleiste_einlagig&i=sicht&w=beg&v=6&dd=200");
+  assert.equal(v1.konfiguration.link, "https://konfigurator.sembla.de/datenblatt.html?f=schindel&i=trockenbau_putz&dd=120&da=60&v=6");
   // Ohne Innenputz bleibt die Dampfbremse zwischen den Dämmlagen.
   const ohne = wandaufbau(A, { fassade: "schindel", innen: "trockenbau", d: 120, da: 60 });
   assert.deepEqual(ohne.schichten.map((s) => s.material).slice(-3), ["mineralwolle", "bahn", "holzfaser_dunkel"]);
